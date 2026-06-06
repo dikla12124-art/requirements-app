@@ -45,6 +45,13 @@
         <td>{{ u.created_at.strftime('%d/%m/%Y') }}</td>
         <td style="text-align:left">
           <details style="display:inline-block">
+            <summary class="btn ghost sm" style="list-style:none">שינוי שם</summary>
+            <form method="post" action="{{ url_for('admin_user_rename', user_id=u.id) }}" style="margin-top:8px;display:flex;gap:6px">
+              <input type="text" name="display_name" value="{{ u.display_name }}" required style="width:160px">
+              <button class="btn sm" type="submit">אישור</button>
+            </form>
+          </details>
+          <details style="display:inline-block">
             <summary class="btn ghost sm" style="list-style:none">איפוס סיסמה</summary>
             <form method="post" action="{{ url_for('admin_user_reset', user_id=u.id) }}" style="margin-top:8px;display:flex;gap:6px">
               <input type="password" name="password" placeholder="סיסמה חדשה" required style="width:160px">

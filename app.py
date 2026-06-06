@@ -341,6 +341,18 @@ def admin_user_delete(user_id):
     return redirect(url_for("admin"))
 
 
+@app.route("/admin/user/<int:user_id>/rename", methods=["POST"])
+@admin_required
+def admin_user_rename(user_id):
+    user = db.session.get(User, user_id)
+    new_name = request.form.get("display_name", "").strip()
+    if user and new_name:
+        user.display_name = new_name
+        db.session.commit()
+        flash(f"השם עודכן ל-{new_name}", "ok")
+    return redirect(url_for("admin"))
+
+
 @app.route("/admin/user/<int:user_id>/reset", methods=["POST"])
 @admin_required
 def admin_user_reset(user_id):
