@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}דרישות · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div>
+      <h1>רשימת הדרישות</h1>
+      <p class="sub">סך הכל {{ requirements|length }} דרישות ראשיות</p>
+    </div>
+  </div>
+
+  <!-- הוספת דרישה -->
+  <details class="add-box">
+    <summary>הוספת דרישה חדשה</summary>
+    <div class="panel">
+      <form method="post" action="{{ url_for('requirement_add') }}">
+        <div class="field">
+          <label>כותרת הדרישה</label>
+          <input type="text" name="title" required placeholder="מה הדרישה?">
+        </div>
+        <div class="field">
+          <label>תיאור</label>
+          <textarea name="description" placeholder="פירוט (אופציונלי)"></textarea>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>מודול</label>
+            <select name="module_id">
+              <option value="">— ללא מודול —</option>
+              {% for m in modules %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>מי הציע/ה את הדרישה</label>
+            <select name="proposer_id">
+              <option value="">— לא צוין —</option>
+              {% for u in users %}<option value="{{ u.id }}">{{ u.display_name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>סטטוס</label>
+            <select name="status">
+              {% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>עדיפות</label>
+            <select name="priority">
+              {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if p=='בינונית' }}>{{ p }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <button class="btn" type="submit">הוספת דרישה</button>
+      </form>
+    </div>
+  </details>
+
+  <!-- סינון -->
+  <form class="filters" method="get">
+    <select name="module" onchange="this.form.submit()">
+      <option value="">כל המודולים</option>
+      {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if module_filter==m.id }}>{{ m.name }}</option>{% endfor %}
+    </select>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">כל הסטטוסים</option>
+      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
+    </select>
+    {% if module_filter or status_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי סינון</a>{% endif %}
+  </form>
+
+  <!-- רשימה -->
+  {% if requirements %}
+  <div class="req-list">
+    {% for r in requirements %}
+    <div class="req-card">
+      <div class="row1">
+        <h3><a href="{{ url_for('requirement_detail', req_id=r.id) }}">{{ r.title }}</a></h3>
+        <span class="status status-{{ r.status }}">{{ r.status }}</span>
+      </div>
+      {% if r.description %}<p class="desc">{{ r.description }}</p>{% endif %}
+      <div class="req-meta">
+        {% if r.module %}<span class="tag"><span class="swatch" style="background:{{ r.module.color }}"></span>{{ r.module.name }}</span>{% endif %}
+        {% if r.proposer %}<span class="tag proposer">הציע/ה: {{ r.proposer.display_name }}</span>{% endif %}
+        {% if r.children %}<span class="tag children">{{ r.children|length }} תתי-דרישות</span>{% endif %}
+        <span class="prio {{ r.priority }}">עדיפות: {{ r.priority }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">אין דרישות עדיין. הוסיפי דרישה ראשונה כדי להתחיל.</div>
+  {% endif %}
+</main>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}התחברות · ניהול דרישות{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="brand"><span class="dot"></span> ניהול דרישות</div>
+    <p class="tagline">מערכת לניהול דרישות ותתי-דרישות</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, msg in messages %}
+        <div class="flash {{ category }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <div class="field">
+        <label>שם משתמש</label>
+        <input type="text" name="username" autofocus required>
+      </div>
+      <div class="field">
+        <label>סיסמה</label>
+        <input type="password" name="password" required>
+      </div>
+      <button class="btn" type="submit">כניסה</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

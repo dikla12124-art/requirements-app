@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ req.title }} · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="crumbs">
+    {% if req.parent %}
+      <a href="{{ url_for('index') }}">דרישות</a> ›
+      <a href="{{ url_for('requirement_detail', req_id=req.parent.id) }}">{{ req.parent.title }}</a> ›
+      תת-דרישה
+    {% else %}
+      <a href="{{ url_for('index') }}">דרישות</a> › {{ req.title }}
+    {% endif %}
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h1>{{ req.title }}</h1>
+      <p class="sub">
+        נוצרה ב-{{ req.created_at.strftime('%d/%m/%Y') }}
+        {% if req.creator %} · הוזנה ע"י {{ req.creator.display_name }}{% endif %}
+      </p>
+    </div>
+    <form class="inline-form" method="post" action="{{ url_for('requirement_delete', req_id=req.id) }}"
+          onsubmit="return confirm('למחוק את הדרישה{% if req.children %} ואת כל תתי-הדרישות שלה{% endif %}?');">
+      <button class="btn danger sm" type="submit">מחיקה</button>
+    </form>
+  </div>
+
+  <div class="detail-grid">
+    <!-- פרטים ותתי-דרישות -->
+    <div>
+      {% if req.description %}
+      <div class="panel" style="margin-bottom:20px">
+        <label style="font-size:14px;font-weight:600;color:var(--ink-soft)">תיאור</label>
+        <p style="margin:6px 0 0;white-space:pre-wrap">{{ req.description }}</p>
+      </div>
+      {% endif %}
+
+      <div class="page-head" style="margin-bottom:14px">
+        <h1 style="font-size:20px">תתי-דרישות {% if req.children %}({{ req.children|length }}){% endif %}</h1>
+      </div>
+
+      <details class="add-box">
+        <summary>הוספת תת-דרישה</summary>
+        <div class="panel">
+          <form method="post" action="{{ url_for('requirement_add') }}">
+            <input type="hidden" name="parent_id" value="{{ req.id }}">
+            <div class="field">
+              <label>כותרת תת-הדרישה</label>
+              <input type="text" name="title" required>
+            </div>
+            <div class="field">
+              <label>תיאור</label>
+              <textarea name="description"></textarea>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label>מי הציע/ה</label>
+                <select name="proposer_id">
+                  <option value="">— לא צוין —</option>
+                  {% for u in users %}<option value="{{ u.id }}">{{ u.display_name }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label>מודול</label>
+                <select name="module_id">
+                  <option value="">— יורש מהאב —</option>
+                  {% for m in modules %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label>סטטוס</label>
+                <select name="status">{% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+              </div>
+              <div class="field">
+                <label>עדיפות</label>
+                <select name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if p=='בינונית' }}>{{ p }}</option>{% endfor %}</select>
+              </div>
+            </div>
+            <button class="btn" type="submit">הוספה</button>
+          </form>
+        </div>
+      </details>
+
+      {% if req.children %}
+      <div class="subtree">
+        {% for c in req.children %}
+        <div class="sub-item">
+          <div class="row1">
+            <h4><a href="{{ url_for('requirement_detail', req_id=c.id) }}">{{ c.title }}</a></h4>
+            <span class="status status-{{ c.status }}">{{ c.status }}</span>
+          </div>
+          {% if c.description %}<p class="desc" style="margin:6px 0 0">{{ c.description }}</p>{% endif %}
+          <div class="req-meta">
+            {% if c.module %}<span class="tag"><span class="swatch" style="background:{{ c.module.color }}"></span>{{ c.module.name }}</span>{% endif %}
+            {% if c.proposer %}<span class="tag proposer">הציע/ה: {{ c.proposer.display_name }}</span>{% endif %}
+            {% if c.children %}<span class="tag children">{{ c.children|length }} תתי-דרישות</span>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:var(--ink-soft)">עדיין אין תתי-דרישות.</p>
+      {% endif %}
+    </div>
+
+    <!-- עריכה -->
+    <div class="panel">
+      <h1 style="font-size:18px;margin:0 0 14px;font-family:'Rubik'">עריכת הדרישה</h1>
+      <form method="post" action="{{ url_for('requirement_edit', req_id=req.id) }}">
+        <div class="field">
+          <label>כותרת</label>
+          <input type="text" name="title" value="{{ req.title }}" required>
+        </div>
+        <div class="field">
+          <label>תיאור</label>
+          <textarea name="description">{{ req.description }}</textarea>
+        </div>
+        <div class="field">
+          <label>מודול</label>
+          <select name="module_id">
+            <option value="">— ללא מודול —</option>
+            {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if req.module_id==m.id }}>{{ m.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>מי הציע/ה את הדרישה</label>
+          <select name="proposer_id">
+            <option value="">— לא צוין —</option>
+            {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if req.proposer_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>סטטוס</label>
+          <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if req.status==s }}>{{ s }}</option>{% endfor %}</select>
+        </div>
+        <div class="field">
+          <label>עדיפות</label>
+          <select name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if req.priority==p }}>{{ p }}</option>{% endfor %}</select>
+        </div>
+        <button class="btn" type="submit">שמירת שינויים</button>
+      </form>
+    </div>
+  </div>
+</main>
+{% endblock %}
