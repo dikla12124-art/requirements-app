@@ -362,7 +362,7 @@ def init_db():
         if not User.query.first():
             admin_username = os.environ.get("ADMIN_USERNAME", "dikla")
             admin_password = os.environ.get("ADMIN_PASSWORD", "changeme123")
-            admin_name = os.environ.get("ADMIN_NAME", "דיקלה")
+            admin_name = os.environ.get("ADMIN_NAME", "דקלה")
             admin_user = User(
                 username=admin_username,
                 display_name=admin_name,

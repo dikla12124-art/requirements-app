@@ -52,7 +52,7 @@ git push -u origin main
    | `SECRET_KEY` | מחרוזת אקראית ארוכה |
    | `ADMIN_USERNAME` | שם המשתמש שלך לכניסה |
    | `ADMIN_PASSWORD` | סיסמה חזקה |
-   | `ADMIN_NAME` | השם שיוצג (למשל: דיקלה) |
+   | `ADMIN_NAME` | השם שיוצג (למשל: דקלה) |
 5. **דומיין:** בלשונית **Settings → Networking → Generate Domain**.
    תקבלי כתובת בסגנון `https://<שם>.up.railway.app`. אפשר גם לחבר דומיין משלך תחת Custom Domain.
 
