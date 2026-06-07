@@ -39,6 +39,9 @@ db = SQLAlchemy(app)
 STATUSES = ["הצעה", "בבדיקה", "אושרה", "בפיתוח", "הושלמה", "נדחתה"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
+# תווית גרסה — לבדיקה שהפריסה התעדכנה
+APP_VERSION = "גרסה 2.1 · צ'אט והתראות"
+
 
 # ---------------------------------------------------------------------------
 # מודלים
@@ -47,6 +50,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     display_name = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(40), default="")  # לטובת התראות וואטסאפ בעתיד
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -94,6 +98,68 @@ class Requirement(db.Model):
     creator = db.relationship("User", foreign_keys=[created_by_id])
 
 
+class ActionLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, nullable=True)        # מי ביצע
+    user_name = db.Column(db.String(120), default="")     # שם משוכפל (נשמר גם אם המשתמש נמחק)
+    action = db.Column(db.String(80), default="")         # סוג הפעולה
+    target = db.Column(db.String(300), default="")        # על מה בוצעה
+    details = db.Column(db.String(500), default="")       # פירוט נוסף
+
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    requirement_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=False)
+    author_id = db.Column(db.Integer, nullable=True)
+    author_name = db.Column(db.String(120), default="")
+    body = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    requirement = db.relationship(
+        "Requirement",
+        backref=db.backref("comments", cascade="all, delete-orphan", order_by="Comment.created_at"),
+    )
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)  # הנמען
+    requirement_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)
+    text = db.Column(db.String(400), default="")
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+def send_whatsapp(phone, message):
+    """
+    נקודת חיבור עתידית לוואטסאפ.
+    כיום אינה פעילה. כדי להפעיל בעתיד דרך Twilio:
+      1. להתקין: pip install twilio (ולהוסיף ל-requirements.txt)
+      2. להגדיר משתני סביבה: TWILIO_SID, TWILIO_TOKEN, TWILIO_WHATSAPP_FROM
+      3. לממש כאן את השליחה בפועל.
+    מוחזר True אם נשלח, אחרת False.
+    """
+    if not phone:
+        return False
+    # --- מקום למימוש Twilio בעתיד ---
+    return False
+
+
+def log_action(action, target="", details=""):
+    """רישום פעולה ללוג. נקרא בתוך נתיב, אחרי שיש משתמש מחובר."""
+    u = current_user()
+    entry = ActionLog(
+        user_id=u.id if u else None,
+        user_name=u.display_name if u else "אורח",
+        action=action,
+        target=str(target)[:300],
+        details=str(details)[:500],
+    )
+    db.session.add(entry)
+    db.session.commit()
+
+
 # ---------------------------------------------------------------------------
 # אימות והרשאות
 # ---------------------------------------------------------------------------
@@ -106,7 +172,25 @@ def current_user():
 
 @app.context_processor
 def inject_user():
-    return {"current_user": current_user()}
+    u = current_user()
+    unread = 0
+    if u:
+        unread = Notification.query.filter_by(user_id=u.id, is_read=False).count()
+    return {"current_user": u, "unread_count": unread, "app_version": APP_VERSION}
+
+
+@app.template_filter("israel_time")
+def israel_time(dt):
+    """המרת זמן UTC לשעון ישראל לתצוגה."""
+    if dt is None:
+        return ""
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(
+            ZoneInfo("Asia/Jerusalem")
+        ).strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        return dt.strftime("%d/%m/%Y %H:%M")
 
 
 def login_required(f):
@@ -143,6 +227,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
             session["user_id"] = user.id
+            log_action("כניסה למערכת")
             return redirect(url_for("index"))
         flash("שם משתמש או סיסמה שגויים", "error")
     return render_template("login.html")
@@ -150,6 +235,7 @@ def login():
 
 @app.route("/logout")
 def logout():
+    log_action("יציאה מהמערכת")
     session.clear()
     return redirect(url_for("login"))
 
@@ -226,6 +312,7 @@ def requirement_add():
     )
     db.session.add(req)
     db.session.commit()
+    log_action("הוספת תת-דרישה" if parent_id else "הוספת דרישה", title)
     flash("הדרישה נוספה בהצלחה", "ok")
     if parent_id:
         return redirect(url_for("requirement_detail", req_id=parent_id))
@@ -245,6 +332,7 @@ def requirement_edit(req_id):
     req.module_id = request.form.get("module_id", type=int) or None
     req.proposer_id = request.form.get("proposer_id", type=int) or None
     db.session.commit()
+    log_action("עריכת דרישה", req.title, f"סטטוס: {req.status}")
     flash("הדרישה עודכנה", "ok")
     return redirect(request.referrer or url_for("requirement_detail", req_id=req_id))
 
@@ -256,12 +344,80 @@ def requirement_delete(req_id):
     if not req:
         abort(404)
     parent_id = req.parent_id
+    req_title = req.title
     db.session.delete(req)
     db.session.commit()
+    log_action("מחיקת דרישה", req_title)
     flash("הדרישה נמחקה", "ok")
     if parent_id:
         return redirect(url_for("requirement_detail", req_id=parent_id))
     return redirect(url_for("index"))
+
+
+@app.route("/requirement/<int:req_id>/comment", methods=["POST"])
+@login_required
+def comment_add(req_id):
+    req = db.session.get(Requirement, req_id)
+    if not req:
+        abort(404)
+    body = request.form.get("body", "").strip()
+    if not body:
+        flash("לא ניתן לשלוח תגובה ריקה", "error")
+        return redirect(url_for("requirement_detail", req_id=req_id))
+
+    me = current_user()
+    comment = Comment(
+        requirement_id=req.id,
+        author_id=me.id,
+        author_name=me.display_name,
+        body=body,
+    )
+    db.session.add(comment)
+    db.session.commit()
+    log_action("תגובה בצ'אט", req.title)
+
+    # אזכורים: כל משתמש שסומן מקבל התראה
+    tagged_ids = request.form.getlist("tagged")
+    for tid in tagged_ids:
+        try:
+            tid = int(tid)
+        except ValueError:
+            continue
+        if tid == me.id:
+            continue
+        target_user = db.session.get(User, tid)
+        if not target_user:
+            continue
+        note = Notification(
+            user_id=target_user.id,
+            requirement_id=req.id,
+            text=f"{me.display_name} אזכר/ה אותך בצ'אט של \"{req.title}\"",
+        )
+        db.session.add(note)
+        # תשתית עתידית לוואטסאפ (כיום אינה פעילה)
+        send_whatsapp(target_user.phone, f"אוזכרת בדרישה: {req.title}")
+    db.session.commit()
+    flash("התגובה נוספה", "ok")
+    return redirect(url_for("requirement_detail", req_id=req_id) + "#chat")
+
+
+# ---------------------------------------------------------------------------
+# התראות
+# ---------------------------------------------------------------------------
+@app.route("/notifications")
+@login_required
+def notifications():
+    me = current_user()
+    notes = (
+        Notification.query.filter_by(user_id=me.id)
+        .order_by(Notification.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    # סימון הכל כנקרא לאחר הצפייה
+    Notification.query.filter_by(user_id=me.id, is_read=False).update({"is_read": True})
+    db.session.commit()
+    return render_template("notifications.html", notes=notes)
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +432,7 @@ def modules():
         if name and not Module.query.filter_by(name=name).first():
             db.session.add(Module(name=name, color=color))
             db.session.commit()
+            log_action("הוספת מודול", name)
             flash("המודול נוסף", "ok")
         else:
             flash("שם מודול ריק או קיים כבר", "error")
@@ -288,8 +445,10 @@ def modules():
 def module_delete(mod_id):
     mod = db.session.get(Module, mod_id)
     if mod:
+        mod_name = mod.name
         db.session.delete(mod)
         db.session.commit()
+        log_action("מחיקת מודול", mod_name)
         flash("המודול נמחק", "ok")
     return redirect(url_for("modules"))
 
@@ -310,6 +469,7 @@ def admin_user_add():
     username = request.form.get("username", "").strip()
     display_name = request.form.get("display_name", "").strip() or username
     password = request.form.get("password", "")
+    phone = request.form.get("phone", "").strip()
     is_admin = bool(request.form.get("is_admin"))
 
     if not username or not password:
@@ -319,10 +479,11 @@ def admin_user_add():
         flash("שם המשתמש כבר קיים", "error")
         return redirect(url_for("admin"))
 
-    user = User(username=username, display_name=display_name, is_admin=is_admin)
+    user = User(username=username, display_name=display_name, phone=phone, is_admin=is_admin)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+    log_action("רישום משתמש", display_name, "אדמין" if is_admin else "משתמש")
     flash(f"המשתמש {display_name} נוסף בהצלחה", "ok")
     return redirect(url_for("admin"))
 
@@ -335,8 +496,10 @@ def admin_user_delete(user_id):
         return redirect(url_for("admin"))
     user = db.session.get(User, user_id)
     if user:
+        user_name = user.display_name
         db.session.delete(user)
         db.session.commit()
+        log_action("מחיקת משתמש", user_name)
         flash("המשתמש נמחק", "ok")
     return redirect(url_for("admin"))
 
@@ -347,9 +510,23 @@ def admin_user_rename(user_id):
     user = db.session.get(User, user_id)
     new_name = request.form.get("display_name", "").strip()
     if user and new_name:
+        old_name = user.display_name
         user.display_name = new_name
         db.session.commit()
+        log_action("שינוי שם משתמש", new_name, f"מ-{old_name}")
         flash(f"השם עודכן ל-{new_name}", "ok")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/user/<int:user_id>/phone", methods=["POST"])
+@admin_required
+def admin_user_phone(user_id):
+    user = db.session.get(User, user_id)
+    if user:
+        user.phone = request.form.get("phone", "").strip()
+        db.session.commit()
+        log_action("עדכון טלפון", user.display_name)
+        flash(f"הטלפון של {user.display_name} עודכן", "ok")
     return redirect(url_for("admin"))
 
 
@@ -361,16 +538,53 @@ def admin_user_reset(user_id):
     if user and new_password:
         user.set_password(new_password)
         db.session.commit()
+        log_action("איפוס סיסמה", user.display_name)
         flash(f"הסיסמה של {user.display_name} אופסה", "ok")
     return redirect(url_for("admin"))
 
 
 # ---------------------------------------------------------------------------
+# לוג פעולות — אדמין בלבד
+# ---------------------------------------------------------------------------
+@app.route("/log")
+@admin_required
+def activity_log():
+    user_filter = request.args.get("user", type=int)
+    query = ActionLog.query
+    if user_filter:
+        query = query.filter_by(user_id=user_filter)
+    entries = query.order_by(ActionLog.timestamp.desc()).limit(500).all()
+    users = User.query.order_by(User.display_name).all()
+    return render_template(
+        "log.html", entries=entries, users=users, user_filter=user_filter
+    )
+
+
+# ---------------------------------------------------------------------------
 # אתחול בסיס הנתונים ויצירת אדמין ראשוני
 # ---------------------------------------------------------------------------
+def ensure_schema():
+    """הוספת עמודות חדשות לטבלאות קיימות (מיגרציה קלה ובטוחה)."""
+    from sqlalchemy import inspect, text
+    insp = inspect(db.engine)
+    try:
+        cols = [c["name"] for c in insp.get_columns("user")]
+    except Exception:
+        return  # הטבלה עוד לא קיימת — create_all יטפל
+    if "phone" not in cols:
+        try:
+            db.session.execute(text('ALTER TABLE "user" ADD COLUMN phone VARCHAR(40)'))
+            db.session.commit()
+            print("[migrate] נוספה עמודת phone לטבלת המשתמשים")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[migrate] שגיאה בהוספת phone: {e}")
+
+
 def init_db():
     with app.app_context():
         db.create_all()
+        ensure_schema()
         if not User.query.first():
             admin_username = os.environ.get("ADMIN_USERNAME", "dikla")
             admin_password = os.environ.get("ADMIN_PASSWORD", "changeme123")
