@@ -195,3 +195,22 @@ tr:last-child td { border-bottom: none; }
 .login-card p.tagline { text-align: center; color: var(--ink-soft); margin: 0 0 24px; font-size: 15px; }
 .login-card .btn { width: 100%; justify-content: center; margin-top: 6px; }
 .inline-form { display: inline; }
+
+/* ---------- Notifications badge ---------- */
+.notif-badge {
+  background: var(--err); color: #fff; font-size: 11px; font-weight: 700;
+  border-radius: 999px; padding: 1px 7px; margin-inline-start: 2px;
+}
+
+/* ---------- Chat ---------- */
+.chat-list { display: flex; flex-direction: column; gap: 10px; }
+.chat-msg {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 15px; max-width: 85%;
+}
+.chat-msg.mine { background: var(--brand-soft); border-color: #cdd9f2; margin-inline-start: auto; }
+.chat-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+.chat-head strong { font-size: 14.5px; }
+.chat-head span { font-size: 12px; color: var(--ink-soft); }
+.chat-body { margin: 0; white-space: pre-wrap; font-size: 15px; }
+select[multiple] { padding: 4px; }

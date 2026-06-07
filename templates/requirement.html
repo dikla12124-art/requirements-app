@@ -102,6 +102,46 @@
       {% else %}
       <p style="color:var(--ink-soft)">עדיין אין תתי-דרישות.</p>
       {% endif %}
+
+      <!-- צ'אט -->
+      <div id="chat" class="page-head" style="margin:28px 0 14px">
+        <h1 style="font-size:20px">צ'אט {% if req.comments %}({{ req.comments|length }}){% endif %}</h1>
+      </div>
+
+      {% if req.comments %}
+      <div class="chat-list">
+        {% for cm in req.comments %}
+        <div class="chat-msg {{ 'mine' if cm.author_id == current_user.id }}">
+          <div class="chat-head">
+            <strong>{{ cm.author_name }}</strong>
+            <span>{{ cm.created_at|israel_time }}</span>
+          </div>
+          <p class="chat-body">{{ cm.body }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:var(--ink-soft)">אין עדיין הודעות בצ'אט. פתחי את השיחה.</p>
+      {% endif %}
+
+      <div class="panel" style="margin-top:14px">
+        <form method="post" action="{{ url_for('comment_add', req_id=req.id) }}">
+          <div class="field">
+            <label>הודעה חדשה</label>
+            <textarea name="body" required placeholder="כתבי הודעה..."></textarea>
+          </div>
+          <div class="field">
+            <label>תיוג משתמשים (יקבלו התראה)</label>
+            <select name="tagged" multiple size="4" style="height:auto">
+              {% for u in users if u.id != current_user.id %}
+              <option value="{{ u.id }}">{{ u.display_name }}{% if u.phone %} · {{ u.phone }}{% endif %}</option>
+              {% endfor %}
+            </select>
+            <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0">לבחירת כמה אנשים — להחזיק Ctrl (או Cmd) בזמן הלחיצה.</p>
+          </div>
+          <button class="btn" type="submit">שליחה</button>
+        </form>
+      </div>
     </div>
 
     <!-- עריכה -->

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}לוג פעולות · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div>
+      <h1>לוג פעולות</h1>
+      <p class="sub">תיעוד כל פעולה במערכת · מוצגות 500 האחרונות</p>
+    </div>
+  </div>
+
+  <form class="filters" method="get">
+    <select name="user" onchange="this.form.submit()">
+      <option value="">כל המשתמשים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if user_filter==u.id }}>{{ u.display_name }}</option>{% endfor %}
+    </select>
+    {% if user_filter %}<a class="btn ghost sm" href="{{ url_for('activity_log') }}">ניקוי סינון</a>{% endif %}
+  </form>
+
+  {% if entries %}
+  <table>
+    <thead><tr><th>תאריך ושעה</th><th>משתמש</th><th>פעולה</th><th>פריט</th><th>פירוט</th></tr></thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td style="white-space:nowrap;color:var(--ink-soft)">{{ e.timestamp|israel_time }}</td>
+        <td>{{ e.user_name }}</td>
+        <td><span class="tag">{{ e.action }}</span></td>
+        <td>{{ e.target }}</td>
+        <td style="color:var(--ink-soft)">{{ e.details }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">אין פעולות מתועדות עדיין.</div>
+  {% endif %}
+</main>
+{% endblock %}

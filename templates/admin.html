@@ -23,6 +23,10 @@
             <label>סיסמה</label>
             <input type="password" name="password" required>
           </div>
+          <div class="field">
+            <label>טלפון (לוואטסאפ בעתיד)</label>
+            <input type="text" name="phone" placeholder="050-0000000">
+          </div>
           <div class="field" style="display:flex;align-items:flex-end">
             <label class="checkbox-row" style="margin:0">
               <input type="checkbox" name="is_admin"> הרשאת אדמין
@@ -35,12 +39,13 @@
   </details>
 
   <table>
-    <thead><tr><th>שם</th><th>שם משתמש</th><th>תפקיד</th><th>נוצר</th><th></th></tr></thead>
+    <thead><tr><th>שם</th><th>שם משתמש</th><th>טלפון</th><th>תפקיד</th><th>נוצר</th><th></th></tr></thead>
     <tbody>
       {% for u in users %}
       <tr>
         <td>{{ u.display_name }}</td>
         <td>{{ u.username }}</td>
+        <td>{{ u.phone or '—' }}</td>
         <td>{% if u.is_admin %}<span class="badge-admin">אדמין</span>{% else %}משתמש{% endif %}</td>
         <td>{{ u.created_at.strftime('%d/%m/%Y') }}</td>
         <td style="text-align:left">
@@ -48,6 +53,13 @@
             <summary class="btn ghost sm" style="list-style:none">שינוי שם</summary>
             <form method="post" action="{{ url_for('admin_user_rename', user_id=u.id) }}" style="margin-top:8px;display:flex;gap:6px">
               <input type="text" name="display_name" value="{{ u.display_name }}" required style="width:160px">
+              <button class="btn sm" type="submit">אישור</button>
+            </form>
+          </details>
+          <details style="display:inline-block">
+            <summary class="btn ghost sm" style="list-style:none">טלפון</summary>
+            <form method="post" action="{{ url_for('admin_user_phone', user_id=u.id) }}" style="margin-top:8px;display:flex;gap:6px">
+              <input type="text" name="phone" value="{{ u.phone }}" placeholder="050-0000000" style="width:160px">
               <button class="btn sm" type="submit">אישור</button>
             </form>
           </details>
