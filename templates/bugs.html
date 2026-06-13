@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}באגים · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div>
+      <h1>ניהול באגים</h1>
+      <p class="sub">{{ open_count }} באגים פתוחים · {{ bugs|length }} בסך הכל{{ ' (מסונן)' if status_filter }}</p>
+    </div>
+  </div>
+
+  <!-- פתיחת באג -->
+  <details class="add-box">
+    <summary>פתיחת באג חדש</summary>
+    <div class="panel">
+      <form method="post" action="{{ url_for('bug_add') }}">
+        <div class="field">
+          <label>שם הבאג</label>
+          <input type="text" name="title" required placeholder="כותרת קצרה לבאג">
+        </div>
+        <div class="field">
+          <label>תיאור הבאג</label>
+          <textarea name="description" placeholder="מה קרה? איך לשחזר?"></textarea>
+        </div>
+        <div class="field">
+          <label>קישור לדרישה קיימת</label>
+          <select name="requirement_id">
+            <option value="">— ללא קישור —</option>
+            {% for r in requirements %}<option value="{{ r.id }}">{{ r.title }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>רעיון לפתרון</label>
+          <textarea name="solution" placeholder="הצעה לפתרון (אופציונלי)"></textarea>
+        </div>
+        <button class="btn" type="submit">פתיחת באג</button>
+      </form>
+    </div>
+  </details>
+
+  <!-- סינון -->
+  <form class="filters" method="get">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">כל הסטטוסים</option>
+      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
+    </select>
+    {% if status_filter %}<a class="btn ghost sm" href="{{ url_for('bugs') }}">ניקוי סינון</a>{% endif %}
+  </form>
+
+  <!-- רשימה -->
+  {% if bugs %}
+  <div class="req-list">
+    {% for b in bugs %}
+    <div class="req-card" style="{{ 'opacity:.7' if b.status=='סגור' }}">
+      <div class="row1">
+        <h3>{{ b.title }}</h3>
+        <span class="status status-{{ 'הושלמה' if b.status=='סגור' else 'בבדיקה' }}">{{ b.status }}</span>
+      </div>
+      {% if b.description %}<p class="desc">{{ b.description }}</p>{% endif %}
+      {% if b.solution %}<p class="desc"><strong>רעיון לפתרון:</strong> {{ b.solution }}</p>{% endif %}
+
+      <div class="req-meta">
+        {% if b.requirement %}<a class="tag proposer" href="{{ url_for('requirement_detail', req_id=b.requirement.id) }}">דרישה: {{ b.requirement.title }}</a>{% endif %}
+        <span class="tag">נפתח ע"י {{ b.opened_by_name }} · {{ b.created_at|israel_time }}</span>
+        {% if b.status_changed_at %}<span class="tag children">סטטוס שונה ע"י {{ b.status_changed_by }} · {{ b.status_changed_at|israel_time }}</span>{% endif %}
+      </div>
+
+      <div class="req-meta" style="margin-top:12px;gap:6px">
+        <!-- שינוי סטטוס -->
+        {% if b.status == 'פתוח' %}
+        <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=b.id) }}">
+          <input type="hidden" name="status" value="סגור">
+          <button class="btn sm" type="submit">סגירת באג</button>
+        </form>
+        {% else %}
+        <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=b.id) }}">
+          <input type="hidden" name="status" value="פתוח">
+          <button class="btn ghost sm" type="submit">פתיחה מחדש</button>
+        </form>
+        {% endif %}
+
+        <!-- עריכה -->
+        <details style="display:inline-block">
+          <summary class="btn ghost sm" style="list-style:none">עריכה</summary>
+          <div class="panel" style="margin-top:10px;min-width:280px">
+            <form method="post" action="{{ url_for('bug_edit', bug_id=b.id) }}">
+              <div class="field"><label>שם הבאג</label><input type="text" name="title" value="{{ b.title }}" required></div>
+              <div class="field"><label>תיאור</label><textarea name="description">{{ b.description }}</textarea></div>
+              <div class="field">
+                <label>קישור לדרישה</label>
+                <select name="requirement_id">
+                  <option value="">— ללא קישור —</option>
+                  {% for r in requirements %}<option value="{{ r.id }}" {{ 'selected' if b.requirement_id==r.id }}>{{ r.title }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field"><label>רעיון לפתרון</label><textarea name="solution">{{ b.solution }}</textarea></div>
+              <button class="btn sm" type="submit">שמירה</button>
+            </form>
+          </div>
+        </details>
+
+        <!-- מחיקה -->
+        <form class="inline-form" method="post" action="{{ url_for('bug_delete', bug_id=b.id) }}"
+              onsubmit="return confirm('למחוק את הבאג?');">
+          <button class="btn danger sm" type="submit">מחיקה</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">אין באגים{{ ' במצב זה' if status_filter else ' עדיין' }}.</div>
+  {% endif %}
+</main>
+{% endblock %}

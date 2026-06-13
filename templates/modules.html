@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}מודולים · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div><h1>מודולים</h1><p class="sub">קטגוריות לשיוך הדרישות</p></div>
+  </div>
+
+  <details class="add-box">
+    <summary>הוספת מודול</summary>
+    <div class="panel">
+      <form method="post">
+        <div class="grid2">
+          <div class="field">
+            <label>שם המודול</label>
+            <input type="text" name="name" required placeholder="לדוגמה: לוגיסטיקה, אבטחה, דוחות">
+          </div>
+          <div class="field">
+            <label>צבע תווית</label>
+            <input type="color" name="color" value="#2f4a8a">
+          </div>
+        </div>
+        <button class="btn" type="submit">הוספה</button>
+      </form>
+    </div>
+  </details>
+
+  {% if modules %}
+  <table>
+    <thead><tr><th>מודול</th><th>מספר דרישות</th><th></th></tr></thead>
+    <tbody>
+      {% for m in modules %}
+      <tr>
+        <td><span class="tag"><span class="swatch" style="background:{{ m.color }}"></span>{{ m.name }}</span></td>
+        <td>{{ m.requirements|length }}</td>
+        <td style="text-align:left">
+          <form class="inline-form" method="post" action="{{ url_for('module_delete', mod_id=m.id) }}"
+                onsubmit="return confirm('למחוק את המודול? הדרישות יישארו אך ללא שיוך.');">
+            <button class="btn danger sm" type="submit">מחיקה</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">אין מודולים עדיין.</div>
+  {% endif %}
+</main>
+{% endblock %}

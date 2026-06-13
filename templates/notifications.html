@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}התראות · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div><h1>ההתראות שלי</h1><p class="sub">אזכורים שקיבלת בצ'אט של הדרישות</p></div>
+  </div>
+
+  {% if notes %}
+  <div class="req-list">
+    {% for n in notes %}
+    <div class="req-card" style="{{ '' if n.is_read else 'border-color:var(--brand)' }}">
+      <div class="row1">
+        <p style="margin:0">{{ n.text }}</p>
+        {% if not n.is_read %}<span class="status status-בפיתוח">חדש</span>{% endif %}
+      </div>
+      <div class="req-meta">
+        <span class="prio">{{ n.created_at|israel_time }}</span>
+        {% if n.requirement_id %}<a class="btn ghost sm" href="{{ url_for('requirement_detail', req_id=n.requirement_id) }}#chat">מעבר לדרישה</a>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">אין התראות.</div>
+  {% endif %}
+</main>
+{% endblock %}

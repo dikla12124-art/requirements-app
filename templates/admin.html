@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}משתמשים · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div><h1>ניהול משתמשים</h1><p class="sub">רק את, כאדמין, יכולה לרשום משתמשים</p></div>
+  </div>
+
+  <details class="add-box">
+    <summary>רישום משתמש חדש</summary>
+    <div class="panel">
+      <form method="post" action="{{ url_for('admin_user_add') }}">
+        <div class="grid2">
+          <div class="field">
+            <label>שם תצוגה</label>
+            <input type="text" name="display_name" required placeholder="שם מלא">
+          </div>
+          <div class="field">
+            <label>שם משתמש (לכניסה)</label>
+            <input type="text" name="username" required>
+          </div>
+          <div class="field">
+            <label>סיסמה</label>
+            <input type="password" name="password" required>
+          </div>
+          <div class="field">
+            <label>טלפון (לוואטסאפ בעתיד)</label>
+            <input type="text" name="phone" placeholder="050-0000000">
+          </div>
+          <div class="field" style="display:flex;align-items:flex-end">
+            <label class="checkbox-row" style="margin:0">
+              <input type="checkbox" name="is_admin"> הרשאת אדמין
+            </label>
+          </div>
+        </div>
+        <button class="btn" type="submit">רישום משתמש</button>
+      </form>
+    </div>
+  </details>
+
+  <table>
+    <thead><tr><th>שם</th><th>שם משתמש</th><th>טלפון</th><th>תפקיד</th><th>נוצר</th><th></th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.display_name }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.phone or '—' }}</td>
+        <td>{% if u.is_admin %}<span class="badge-admin">אדמין</span>{% else %}משתמש{% endif %}</td>
+        <td>{{ u.created_at.strftime('%d/%m/%Y') }}</td>
+        <td style="text-align:left">
+          <details style="display:inline-block">
+            <summary class="btn ghost sm" style="list-style:none">שינוי שם</summary>
+            <form method="post" action="{{ url_for('admin_user_rename', user_id=u.id) }}" style="margin-top:8px;display:flex;gap:6px">
+              <input type="text" name="display_name" value="{{ u.display_name }}" required style="width:160px">
+              <button class="btn sm" type="submit">אישור</button>
+            </form>
+          </details>
+          <details style="display:inline-block">
+            <summary class="btn ghost sm" style="list-style:none">טלפון</summary>
+            <form method="post" action="{{ url_for('admin_user_phone', user_id=u.id) }}" style="margin-top:8px;display:flex;gap:6px">
+              <input type="text" name="phone" value="{{ u.phone }}" placeholder="050-0000000" style="width:160px">
+              <button class="btn sm" type="submit">אישור</button>
+            </form>
+          </details>
+          <details style="display:inline-block">
+            <summary class="btn ghost sm" style="list-style:none">איפוס סיסמה</summary>
+            <form method="post" action="{{ url_for('admin_user_reset', user_id=u.id) }}" style="margin-top:8px;display:flex;gap:6px">
+              <input type="password" name="password" placeholder="סיסמה חדשה" required style="width:160px">
+              <button class="btn sm" type="submit">אישור</button>
+            </form>
+          </details>
+          {% if u.id != current_user.id %}
+          <form class="inline-form" method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}"
+                onsubmit="return confirm('למחוק את המשתמש?');">
+            <button class="btn danger sm" type="submit">מחיקה</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</main>
+{% endblock %}
