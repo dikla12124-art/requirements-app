@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}משימות · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div>
+      <h1>ניהול משימות</h1>
+      <p class="sub">{{ open_count }} משימות פתוחות · {{ tasks|length }} בסך הכל{{ ' (מסונן)' if status_filter or assignee_filter }}</p>
+    </div>
+  </div>
+
+  <!-- הוספת משימה -->
+  <details class="add-box">
+    <summary>משימה חדשה</summary>
+    <div class="panel">
+      <form method="post" action="{{ url_for('task_add') }}">
+        <div class="field">
+          <label>שם המשימה</label>
+          <input type="text" name="title" required placeholder="מה צריך לעשות?">
+        </div>
+        <div class="field">
+          <label>תיאור</label>
+          <textarea name="description" placeholder="פירוט (אופציונלי)"></textarea>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>אחראי</label>
+            <select name="assignee_id">
+              <option value="">— לא שויך —</option>
+              {% for u in users %}<option value="{{ u.id }}">{{ u.display_name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>תאריך יעד</label>
+            <input type="date" name="due_date">
+          </div>
+          <div class="field">
+            <label>סטטוס</label>
+            <select name="status">{% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+          </div>
+        </div>
+        <button class="btn" type="submit">הוספת משימה</button>
+      </form>
+    </div>
+  </details>
+
+  <!-- סינון -->
+  <form class="filters" method="get">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">כל הסטטוסים</option>
+      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <select name="assignee" onchange="this.form.submit()">
+      <option value="">כל האחראים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>{{ u.display_name }}</option>{% endfor %}
+    </select>
+    {% if status_filter or assignee_filter %}<a class="btn ghost sm" href="{{ url_for('tasks') }}">ניקוי סינון</a>{% endif %}
+  </form>
+
+  <!-- רשימה -->
+  {% if tasks %}
+  <div class="req-list">
+    {% for t in tasks %}
+    <div class="req-card" style="{{ 'opacity:.65' if t.status=='הושלם' }}">
+      <div class="row1">
+        <h3>{{ t.title }}</h3>
+        <span class="status status-{{ 'הושלמה' if t.status=='הושלם' else ('בפיתוח' if t.status=='בתהליך' else 'הצעה') }}">{{ t.status }}</span>
+      </div>
+      {% if t.description %}<p class="desc">{{ t.description }}</p>{% endif %}
+
+      <div class="req-meta">
+        {% if t.assignee_name %}<span class="tag proposer">אחראי: {{ t.assignee_name }}</span>{% else %}<span class="tag">לא שויך</span>{% endif %}
+        {% if t.due_date %}
+          {% set overdue = t.due_date < today and t.status != 'הושלם' %}
+          <span class="tag" style="{{ 'background:var(--err-soft);color:var(--err)' if overdue }}">
+            יעד: {{ t.due_date.strftime('%d/%m/%Y') }}{{ ' · באיחור' if overdue }}
+          </span>
+        {% endif %}
+        <span class="prio">נפתחה ע"י {{ t.created_by_name }} · {{ t.created_at|israel_time }}</span>
+      </div>
+
+      <div class="req-meta" style="margin-top:12px;gap:6px">
+        <!-- שינוי סטטוס מהיר -->
+        <form class="inline-form" method="post" action="{{ url_for('task_status', task_id=t.id) }}">
+          <select name="status" onchange="this.form.submit()" style="width:auto;padding:6px 10px;font-size:13.5px">
+            {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if t.status==s }}>{{ s }}</option>{% endfor %}
+          </select>
+        </form>
+
+        <!-- עריכה -->
+        <details style="display:inline-block">
+          <summary class="btn ghost sm" style="list-style:none">עריכה</summary>
+          <div class="panel" style="margin-top:10px;min-width:280px">
+            <form method="post" action="{{ url_for('task_edit', task_id=t.id) }}">
+              <div class="field"><label>שם המשימה</label><input type="text" name="title" value="{{ t.title }}" required></div>
+              <div class="field"><label>תיאור</label><textarea name="description">{{ t.description }}</textarea></div>
+              <div class="field">
+                <label>אחראי</label>
+                <select name="assignee_id">
+                  <option value="">— לא שויך —</option>
+                  {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if t.assignee_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field"><label>תאריך יעד</label><input type="date" name="due_date" value="{{ t.due_date.strftime('%Y-%m-%d') if t.due_date }}"></div>
+              <button class="btn sm" type="submit">שמירה</button>
+            </form>
+          </div>
+        </details>
+
+        <!-- מחיקה -->
+        <form class="inline-form" method="post" action="{{ url_for('task_delete', task_id=t.id) }}"
+              onsubmit="return confirm('למחוק את המשימה?');">
+          <button class="btn danger sm" type="submit">מחיקה</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">אין משימות{{ ' במצב זה' if status_filter or assignee_filter else ' עדיין' }}.</div>
+  {% endif %}
+</main>
+{% endblock %}

@@ -19,6 +19,7 @@
     </a>
     <nav class="mainnav">
       <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">דרישות</a>
+      <a href="{{ url_for('tasks') }}" class="{{ 'active' if request.endpoint == 'tasks' }}">משימות</a>
       <a href="{{ url_for('bugs') }}" class="{{ 'active' if request.endpoint == 'bugs' }}">באגים</a>
       <a href="{{ url_for('modules') }}" class="{{ 'active' if request.endpoint == 'modules' }}">מודולים</a>
       {% if current_user.is_admin %}

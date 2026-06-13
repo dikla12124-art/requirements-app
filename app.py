@@ -9,7 +9,7 @@
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, date
 from functools import wraps
 
 from flask import (
@@ -40,7 +40,7 @@ STATUSES = ["הצעה", "בבדיקה", "אושרה", "בפיתוח", "הושל�
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.1 · ניהול באגים"
+APP_VERSION = "גרסה 3.2 · ניהול משימות"
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +150,23 @@ class Bug(db.Model):
 
 
 BUG_STATUSES = ["פתוח", "סגור"]
+
+
+class Task(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(300), nullable=False)          # שם המשימה
+    description = db.Column(db.Text, default="")               # תיאור
+    assignee_id = db.Column(db.Integer, nullable=True)         # אחראי (מזהה)
+    assignee_name = db.Column(db.String(120), default="")      # אחראי (שם לתצוגה)
+    due_date = db.Column(db.Date, nullable=True)               # תאריך יעד
+    status = db.Column(db.String(20), default="לביצוע")        # לביצוע / בתהליך / הושלם
+
+    created_by_id = db.Column(db.Integer, nullable=True)
+    created_by_name = db.Column(db.String(120), default="")    # מי פתח
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+TASK_STATUSES = ["לביצוע", "בתהליך", "הושלם"]
 
 
 def send_whatsapp(phone, message):
@@ -534,6 +551,125 @@ def bug_delete(bug_id):
         log_action("מחיקת באג", title)
         flash("הבאג נמחק", "ok")
     return redirect(url_for("bugs"))
+
+
+# ---------------------------------------------------------------------------
+# ניהול משימות
+# ---------------------------------------------------------------------------
+def _parse_date(value):
+    """המרת מחרוזת תאריך מטופס (YYYY-MM-DD) לאובייקט תאריך."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@app.route("/tasks")
+@login_required
+def tasks():
+    status_filter = request.args.get("status", "")
+    assignee_filter = request.args.get("assignee", type=int)
+    query = Task.query
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if assignee_filter:
+        query = query.filter_by(assignee_id=assignee_filter)
+    task_list = query.order_by(Task.status, Task.due_date.is_(None), Task.due_date).all()
+    users = User.query.order_by(User.display_name).all()
+    open_count = Task.query.filter(Task.status != "הושלם").count()
+    return render_template(
+        "tasks.html",
+        tasks=task_list,
+        users=users,
+        statuses=TASK_STATUSES,
+        status_filter=status_filter,
+        assignee_filter=assignee_filter,
+        open_count=open_count,
+        today=date.today(),
+    )
+
+
+@app.route("/tasks/add", methods=["POST"])
+@login_required
+def task_add():
+    title = request.form.get("title", "").strip()
+    if not title:
+        flash("חובה להזין שם למשימה", "error")
+        return redirect(url_for("tasks"))
+    me = current_user()
+    assignee_id = request.form.get("assignee_id", type=int) or None
+    assignee_name = ""
+    if assignee_id:
+        a = db.session.get(User, assignee_id)
+        assignee_name = a.display_name if a else ""
+    task = Task(
+        title=title,
+        description=request.form.get("description", "").strip(),
+        assignee_id=assignee_id,
+        assignee_name=assignee_name,
+        due_date=_parse_date(request.form.get("due_date")),
+        status=request.form.get("status") or "לביצוע",
+        created_by_id=me.id,
+        created_by_name=me.display_name,
+    )
+    db.session.add(task)
+    db.session.commit()
+    log_action("פתיחת משימה", title)
+    flash("המשימה נוספה בהצלחה", "ok")
+    return redirect(url_for("tasks"))
+
+
+@app.route("/task/<int:task_id>/edit", methods=["POST"])
+@login_required
+def task_edit(task_id):
+    task = db.session.get(Task, task_id)
+    if not task:
+        abort(404)
+    task.title = request.form.get("title", task.title).strip()
+    task.description = request.form.get("description", "").strip()
+    task.due_date = _parse_date(request.form.get("due_date"))
+    assignee_id = request.form.get("assignee_id", type=int) or None
+    task.assignee_id = assignee_id
+    if assignee_id:
+        a = db.session.get(User, assignee_id)
+        task.assignee_name = a.display_name if a else ""
+    else:
+        task.assignee_name = ""
+    db.session.commit()
+    log_action("עריכת משימה", task.title)
+    flash("המשימה עודכנה", "ok")
+    return redirect(url_for("tasks"))
+
+
+@app.route("/task/<int:task_id>/status", methods=["POST"])
+@login_required
+def task_status(task_id):
+    task = db.session.get(Task, task_id)
+    if not task:
+        abort(404)
+    new_status = request.form.get("status", "")
+    if new_status in TASK_STATUSES and new_status != task.status:
+        task.status = new_status
+        db.session.commit()
+        log_action("שינוי סטטוס משימה", task.title, f"ל-{new_status}")
+        flash(f"סטטוס המשימה שונה ל-{new_status}", "ok")
+    return redirect(url_for("tasks"))
+
+
+@app.route("/task/<int:task_id>/delete", methods=["POST"])
+@login_required
+def task_delete(task_id):
+    task = db.session.get(Task, task_id)
+    if task:
+        title = task.title
+        db.session.delete(task)
+        db.session.commit()
+        log_action("מחיקת משימה", title)
+        flash("המשימה נמחקה", "ok")
+    return redirect(url_for("tasks"))
 
 
 # ---------------------------------------------------------------------------
