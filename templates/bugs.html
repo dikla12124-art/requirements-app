@@ -30,6 +30,13 @@
           </select>
         </div>
         <div class="field">
+          <label>הקצאה לאחראי</label>
+          <select name="assignee_id">
+            <option value="">— לא שויך —</option>
+            {% for u in users %}<option value="{{ u.id }}">{{ u.display_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
           <label>רעיון לפתרון</label>
           <textarea name="solution" placeholder="הצעה לפתרון (אופציונלי)"></textarea>
         </div>
@@ -44,7 +51,11 @@
       <option value="">כל הסטטוסים</option>
       {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
     </select>
-    {% if status_filter %}<a class="btn ghost sm" href="{{ url_for('bugs') }}">ניקוי סינון</a>{% endif %}
+    <select name="assignee" onchange="this.form.submit()">
+      <option value="">כל האחראים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>{{ u.display_name }}</option>{% endfor %}
+    </select>
+    {% if status_filter or assignee_filter %}<a class="btn ghost sm" href="{{ url_for('bugs') }}">ניקוי סינון</a>{% endif %}
   </form>
 
   <!-- רשימה -->
@@ -53,7 +64,7 @@
     {% for b in bugs %}
     <div class="req-card" style="{{ 'opacity:.7' if b.status=='סגור' }}">
       <div class="row1">
-        <h3>{{ b.title }}</h3>
+        <h3><a href="{{ url_for('bug_detail', bug_id=b.id) }}">{{ b.title }}</a></h3>
         <span class="status status-{{ 'הושלמה' if b.status=='סגור' else 'בבדיקה' }}">{{ b.status }}</span>
       </div>
       {% if b.description %}<p class="desc">{{ b.description }}</p>{% endif %}
@@ -61,7 +72,9 @@
 
       <div class="req-meta">
         {% if b.requirement %}<a class="tag proposer" href="{{ url_for('requirement_detail', req_id=b.requirement.id) }}">דרישה: {{ b.requirement.title }}</a>{% endif %}
+        {% if b.assignee_name %}<span class="tag proposer">אחראי: {{ b.assignee_name }}</span>{% endif %}
         <span class="tag">נפתח ע"י {{ b.opened_by_name }} · {{ b.created_at|israel_time }}</span>
+        {% if b.comments %}<span class="tag children">{{ b.comments|length }} בצ'אט</span>{% endif %}
         {% if b.status_changed_at %}<span class="tag children">סטטוס שונה ע"י {{ b.status_changed_by }} · {{ b.status_changed_at|israel_time }}</span>{% endif %}
       </div>
 
@@ -91,6 +104,13 @@
                 <select name="requirement_id">
                   <option value="">— ללא קישור —</option>
                   {% for r in requirements %}<option value="{{ r.id }}" {{ 'selected' if b.requirement_id==r.id }}>{{ r.title }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label>אחראי</label>
+                <select name="assignee_id">
+                  <option value="">— לא שויך —</option>
+                  {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if b.assignee_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
                 </select>
               </div>
               <div class="field"><label>רעיון לפתרון</label><textarea name="solution">{{ b.solution }}</textarea></div>

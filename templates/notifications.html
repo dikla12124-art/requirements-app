@@ -17,6 +17,7 @@
       <div class="req-meta">
         <span class="prio">{{ n.created_at|israel_time }}</span>
         {% if n.requirement_id %}<a class="btn ghost sm" href="{{ url_for('requirement_detail', req_id=n.requirement_id) }}#chat">מעבר לדרישה</a>{% endif %}
+        {% if n.bug_id %}<a class="btn ghost sm" href="{{ url_for('bug_detail', bug_id=n.bug_id) }}#chat">מעבר לבאג</a>{% endif %}
       </div>
     </div>
     {% endfor %}

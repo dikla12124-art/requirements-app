@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ bug.title }} · באג{% endblock %}
+{% block content %}
+<main>
+  <div class="crumbs">
+    <a href="{{ url_for('bugs') }}">באגים</a> › {{ bug.title }}
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h1>{{ bug.title }}</h1>
+      <p class="sub">
+        נפתח ע"י {{ bug.opened_by_name }} · {{ bug.created_at|israel_time }}
+        {% if bug.status_changed_at %} · סטטוס שונה ע"י {{ bug.status_changed_by }} ({{ bug.status_changed_at|israel_time }}){% endif %}
+      </p>
+    </div>
+    <span class="status status-{{ 'הושלמה' if bug.status=='סגור' else 'בבדיקה' }}" style="font-size:15px">{{ bug.status }}</span>
+  </div>
+
+  <div class="detail-grid">
+    <!-- פרטים + צ'אט -->
+    <div>
+      <div class="panel" style="margin-bottom:20px">
+        {% if bug.description %}<p style="margin:0 0 12px;white-space:pre-wrap"><strong>תיאור:</strong> {{ bug.description }}</p>{% endif %}
+        {% if bug.solution %}<p style="margin:0 0 12px;white-space:pre-wrap"><strong>רעיון לפתרון:</strong> {{ bug.solution }}</p>{% endif %}
+        <div class="req-meta">
+          {% if bug.requirement %}<a class="tag proposer" href="{{ url_for('requirement_detail', req_id=bug.requirement.id) }}">דרישה: {{ bug.requirement.title }}</a>{% endif %}
+          {% if bug.assignee_name %}<span class="tag proposer">אחראי: {{ bug.assignee_name }}</span>{% else %}<span class="tag">לא שויך אחראי</span>{% endif %}
+        </div>
+        <div class="req-meta" style="margin-top:12px;gap:6px">
+          {% if bug.status == 'פתוח' %}
+          <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=bug.id) }}">
+            <input type="hidden" name="status" value="סגור"><button class="btn sm" type="submit">סגירת באג</button>
+          </form>
+          {% else %}
+          <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=bug.id) }}">
+            <input type="hidden" name="status" value="פתוח"><button class="btn ghost sm" type="submit">פתיחה מחדש</button>
+          </form>
+          {% endif %}
+          <form class="inline-form" method="post" action="{{ url_for('bug_delete', bug_id=bug.id) }}" onsubmit="return confirm('למחוק את הבאג?');">
+            <button class="btn danger sm" type="submit">מחיקה</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- צ'אט -->
+      <div id="chat" class="page-head" style="margin:0 0 14px">
+        <h1 style="font-size:20px">צ'אט {% if bug.comments %}({{ bug.comments|length }}){% endif %}</h1>
+      </div>
+
+      {% if bug.comments %}
+      <div class="chat-list">
+        {% for cm in bug.comments %}
+        <div class="chat-msg {{ 'mine' if cm.author_id == current_user.id }}">
+          <div class="chat-head"><strong>{{ cm.author_name }}</strong><span>{{ cm.created_at|israel_time }}</span></div>
+          <p class="chat-body">{{ cm.body }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:var(--ink-soft)">אין עדיין הודעות בצ'אט.</p>
+      {% endif %}
+
+      <div class="panel" style="margin-top:14px">
+        <form method="post" action="{{ url_for('bug_comment_add', bug_id=bug.id) }}">
+          <div class="field">
+            <label>הודעה חדשה</label>
+            <textarea name="body" required placeholder="כתבי הודעה..."></textarea>
+          </div>
+          <div class="field">
+            <label>תיוג משתמשים (יקבלו התראה)</label>
+            <select name="tagged" multiple size="4" style="height:auto">
+              {% for u in users if u.id != current_user.id %}
+              <option value="{{ u.id }}">{{ u.display_name }}{% if u.phone %} · {{ u.phone }}{% endif %}</option>
+              {% endfor %}
+            </select>
+            <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0">לבחירת כמה אנשים — להחזיק Ctrl (או Cmd) בזמן הלחיצה.</p>
+          </div>
+          <button class="btn" type="submit">שליחה</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- עריכה -->
+    <div class="panel">
+      <h1 style="font-size:18px;margin:0 0 14px;font-family:'Rubik'">עריכת הבאג</h1>
+      <form method="post" action="{{ url_for('bug_edit', bug_id=bug.id) }}">
+        <div class="field"><label>שם הבאג</label><input type="text" name="title" value="{{ bug.title }}" required></div>
+        <div class="field"><label>תיאור</label><textarea name="description">{{ bug.description }}</textarea></div>
+        <div class="field"><label>רעיון לפתרון</label><textarea name="solution">{{ bug.solution }}</textarea></div>
+        <div class="field">
+          <label>קישור לדרישה</label>
+          <select name="requirement_id">
+            <option value="">— ללא קישור —</option>
+            {% for r in requirements %}<option value="{{ r.id }}" {{ 'selected' if bug.requirement_id==r.id }}>{{ r.title }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>אחראי</label>
+          <select name="assignee_id">
+            <option value="">— לא שויך —</option>
+            {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if bug.assignee_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <button class="btn" type="submit">שמירת שינויים</button>
+      </form>
+    </div>
+  </div>
+</main>
+{% endblock %}

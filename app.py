@@ -40,7 +40,7 @@ STATUSES = ["הצעה", "בבדיקה", "אושרה", "בפיתוח", "הושל�
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.2 · ניהול משימות"
+APP_VERSION = "גרסה 3.3 · אחראי וצ'אט לבאגים"
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +126,7 @@ class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)  # הנמען
     requirement_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)
+    bug_id = db.Column(db.Integer, db.ForeignKey("bug.id"), nullable=True)
     text = db.Column(db.String(400), default="")
     is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -139,6 +140,9 @@ class Bug(db.Model):
     requirement_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)  # קישור לדרישה
     status = db.Column(db.String(20), default="פתוח")          # פתוח / סגור
 
+    assignee_id = db.Column(db.Integer, nullable=True)         # אחראי על הבאג (מזהה)
+    assignee_name = db.Column(db.String(120), default="")      # אחראי (שם לתצוגה)
+
     opened_by_id = db.Column(db.Integer, nullable=True)
     opened_by_name = db.Column(db.String(120), default="")     # מי פתח
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # מתי נפתח
@@ -147,6 +151,20 @@ class Bug(db.Model):
     status_changed_at = db.Column(db.DateTime, nullable=True)
 
     requirement = db.relationship("Requirement")
+
+
+class BugComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    bug_id = db.Column(db.Integer, db.ForeignKey("bug.id"), nullable=False)
+    author_id = db.Column(db.Integer, nullable=True)
+    author_name = db.Column(db.String(120), default="")
+    body = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    bug = db.relationship(
+        "Bug",
+        backref=db.backref("comments", cascade="all, delete-orphan", order_by="BugComment.created_at"),
+    )
 
 
 BUG_STATUSES = ["פתוח", "סגור"]
@@ -465,21 +483,42 @@ def notifications():
 @login_required
 def bugs():
     status_filter = request.args.get("status", "")
+    assignee_filter = request.args.get("assignee", type=int)
     query = Bug.query
     if status_filter:
         query = query.filter_by(status=status_filter)
+    if assignee_filter:
+        query = query.filter_by(assignee_id=assignee_filter)
     # פתוחים קודם, ואז לפי תאריך יורד
     bug_list = query.order_by(Bug.status.desc(), Bug.created_at.desc()).all()
     requirements = Requirement.query.order_by(Requirement.title).all()
+    users = User.query.order_by(User.display_name).all()
     open_count = Bug.query.filter_by(status="פתוח").count()
     return render_template(
         "bugs.html",
         bugs=bug_list,
         requirements=requirements,
+        users=users,
         statuses=BUG_STATUSES,
         status_filter=status_filter,
+        assignee_filter=assignee_filter,
         open_count=open_count,
     )
+
+
+def _notify_assignee(bug, assignee_id, actor):
+    """יצירת התראה למשתמש שהבאג הוקצה לו (אם אינו עצמו)."""
+    if not assignee_id or assignee_id == actor.id:
+        return
+    target = db.session.get(User, assignee_id)
+    if not target:
+        return
+    db.session.add(Notification(
+        user_id=target.id,
+        bug_id=bug.id,
+        text=f"{actor.display_name} הקצה/תה לך את הבאג \"{bug.title}\"",
+    ))
+    send_whatsapp(target.phone, f"הוקצה לך באג: {bug.title}")
 
 
 @app.route("/bugs/add", methods=["POST"])
@@ -490,20 +529,43 @@ def bug_add():
         flash("חובה להזין שם לבאג", "error")
         return redirect(url_for("bugs"))
     me = current_user()
+    assignee_id = request.form.get("assignee_id", type=int) or None
+    assignee_name = ""
+    if assignee_id:
+        a = db.session.get(User, assignee_id)
+        assignee_name = a.display_name if a else ""
     bug = Bug(
         title=title,
         description=request.form.get("description", "").strip(),
         solution=request.form.get("solution", "").strip(),
         requirement_id=request.form.get("requirement_id", type=int) or None,
         status="פתוח",
+        assignee_id=assignee_id,
+        assignee_name=assignee_name,
         opened_by_id=me.id,
         opened_by_name=me.display_name,
     )
     db.session.add(bug)
     db.session.commit()
+    _notify_assignee(bug, assignee_id, me)
+    db.session.commit()
     log_action("פתיחת באג", title)
     flash("הבאג נפתח בהצלחה", "ok")
     return redirect(url_for("bugs"))
+
+
+@app.route("/bug/<int:bug_id>")
+@login_required
+def bug_detail(bug_id):
+    bug = db.session.get(Bug, bug_id)
+    if not bug:
+        abort(404)
+    requirements = Requirement.query.order_by(Requirement.title).all()
+    users = User.query.order_by(User.display_name).all()
+    return render_template(
+        "bug_detail.html", bug=bug, requirements=requirements,
+        users=users, statuses=BUG_STATUSES,
+    )
 
 
 @app.route("/bug/<int:bug_id>/edit", methods=["POST"])
@@ -512,14 +574,27 @@ def bug_edit(bug_id):
     bug = db.session.get(Bug, bug_id)
     if not bug:
         abort(404)
+    me = current_user()
+    prev_assignee = bug.assignee_id
     bug.title = request.form.get("title", bug.title).strip()
     bug.description = request.form.get("description", "").strip()
     bug.solution = request.form.get("solution", "").strip()
     bug.requirement_id = request.form.get("requirement_id", type=int) or None
+    assignee_id = request.form.get("assignee_id", type=int) or None
+    bug.assignee_id = assignee_id
+    if assignee_id:
+        a = db.session.get(User, assignee_id)
+        bug.assignee_name = a.display_name if a else ""
+    else:
+        bug.assignee_name = ""
     db.session.commit()
+    # התראה רק אם האחראי השתנה
+    if assignee_id and assignee_id != prev_assignee:
+        _notify_assignee(bug, assignee_id, me)
+        db.session.commit()
     log_action("עריכת באג", bug.title)
     flash("הבאג עודכן", "ok")
-    return redirect(url_for("bugs"))
+    return redirect(request.referrer or url_for("bugs"))
 
 
 @app.route("/bug/<int:bug_id>/status", methods=["POST"])
@@ -537,7 +612,45 @@ def bug_status(bug_id):
         db.session.commit()
         log_action("שינוי סטטוס באג", bug.title, f"ל-{new_status}")
         flash(f"סטטוס הבאג שונה ל-{new_status}", "ok")
-    return redirect(url_for("bugs"))
+    return redirect(request.referrer or url_for("bugs"))
+
+
+@app.route("/bug/<int:bug_id>/comment", methods=["POST"])
+@login_required
+def bug_comment_add(bug_id):
+    bug = db.session.get(Bug, bug_id)
+    if not bug:
+        abort(404)
+    body = request.form.get("body", "").strip()
+    if not body:
+        flash("לא ניתן לשלוח תגובה ריקה", "error")
+        return redirect(url_for("bug_detail", bug_id=bug_id))
+    me = current_user()
+    db.session.add(BugComment(
+        bug_id=bug.id, author_id=me.id, author_name=me.display_name, body=body,
+    ))
+    db.session.commit()
+    log_action("תגובה בצ'אט באג", bug.title)
+
+    # אזכורים בשיח → התראות
+    for tid in request.form.getlist("tagged"):
+        try:
+            tid = int(tid)
+        except ValueError:
+            continue
+        if tid == me.id:
+            continue
+        target = db.session.get(User, tid)
+        if not target:
+            continue
+        db.session.add(Notification(
+            user_id=target.id, bug_id=bug.id,
+            text=f"{me.display_name} אזכר/ה אותך בצ'אט של הבאג \"{bug.title}\"",
+        ))
+        send_whatsapp(target.phone, f"אוזכרת בבאג: {bug.title}")
+    db.session.commit()
+    flash("התגובה נוספה", "ok")
+    return redirect(url_for("bug_detail", bug_id=bug_id) + "#chat")
 
 
 @app.route("/bug/<int:bug_id>/delete", methods=["POST"])
@@ -816,21 +929,36 @@ def activity_log():
 # אתחול בסיס הנתונים ויצירת אדמין ראשוני
 # ---------------------------------------------------------------------------
 def ensure_schema():
-    """הוספת עמודות חדשות לטבלאות קיימות (מיגרציה קלה ובטוחה)."""
+    """
+    מיגרציה קלה ובטוחה: מוסיפה עמודות חדשות לטבלאות קיימות בלבד.
+    מבצעת אך ורק ALTER TABLE ... ADD COLUMN — פעולה שלעולם אינה מוחקת
+    או משנה נתונים קיימים. רצה בכל עלייה ומדלגת על מה שכבר קיים.
+    """
     from sqlalchemy import inspect, text
     insp = inspect(db.engine)
-    try:
-        cols = [c["name"] for c in insp.get_columns("user")]
-    except Exception:
-        return  # הטבלה עוד לא קיימת — create_all יטפל
-    if "phone" not in cols:
+
+    # (טבלה, עמודה, סוג) — כל אלה תוספות בלבד
+    needed = [
+        ("user", "phone", "VARCHAR(40)"),
+        ("bug", "assignee_id", "INTEGER"),
+        ("bug", "assignee_name", "VARCHAR(120)"),
+        ("notification", "bug_id", "INTEGER"),
+    ]
+    for table, column, coltype in needed:
         try:
-            db.session.execute(text('ALTER TABLE "user" ADD COLUMN phone VARCHAR(40)'))
-            db.session.commit()
-            print("[migrate] נוספה עמודת phone לטבלת המשתמשים")
-        except Exception as e:
-            db.session.rollback()
-            print(f"[migrate] שגיאה בהוספת phone: {e}")
+            existing = [c["name"] for c in insp.get_columns(table)]
+        except Exception:
+            continue  # הטבלה עוד לא קיימת — create_all ייצור אותה מלאה
+        if column not in existing:
+            try:
+                db.session.execute(
+                    text(f'ALTER TABLE "{table}" ADD COLUMN {column} {coltype}')
+                )
+                db.session.commit()
+                print(f"[migrate] נוספה עמודה {column} לטבלת {table}")
+            except Exception as e:
+                db.session.rollback()
+                print(f"[migrate] דילוג על {table}.{column}: {e}")
 
 
 def init_db():
