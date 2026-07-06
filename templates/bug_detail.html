@@ -17,7 +17,7 @@
       </p>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <span class="status status-{{ 'הושלמה' if bug.status=='סגור' else 'בבדיקה' }}" style="font-size:15px">{{ bug.status }}</span>
+      <span class="status status-{{ bug.status }}" style="font-size:15px">{{ bug.status }}</span>
       <button type="button" class="btn ghost sm" onclick="toggleEdit()">עריכה</button>
     </div>
   </div>
@@ -34,15 +34,12 @@
           <span class="prio {{ bug.priority }}">עדיפות: {{ bug.priority or 'בינונית' }}</span>
         </div>
         <div class="req-meta" style="margin-top:12px;gap:6px">
-          {% if bug.status == 'פתוח' %}
           <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=bug.id) }}">
-            <input type="hidden" name="status" value="סגור"><button class="btn sm" type="submit">סגירת באג</button>
+            <label style="font-size:13px;color:var(--ink-soft);margin-inline-end:4px">סטטוס:</label>
+            <select name="status" onchange="this.form.submit()" style="width:auto;padding:6px 10px;font-size:13.5px">
+              {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if bug.status==s }}>{{ s }}</option>{% endfor %}
+            </select>
           </form>
-          {% else %}
-          <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=bug.id) }}">
-            <input type="hidden" name="status" value="פתוח"><button class="btn ghost sm" type="submit">פתיחה מחדש</button>
-          </form>
-          {% endif %}
           <form class="inline-form" method="post" action="{{ url_for('bug_delete', bug_id=bug.id) }}" onsubmit="return confirm('למחוק את הבאג?');">
             <button class="btn danger sm" type="submit">מחיקה</button>
           </form>

@@ -73,10 +73,10 @@
   {% if tasks %}
   <div class="req-list">
     {% for t in tasks %}
-    <div class="req-card" style="{{ 'opacity:.65' if t.status=='הושלם' }}">
+    <div class="req-card" style="{{ 'opacity:.65' if t.status=='בוצע' }}">
       <div class="row1">
         <h3>{{ t.title }}</h3>
-        <span class="status status-{{ 'הושלמה' if t.status=='הושלם' else ('בפיתוח' if t.status=='בתהליך' else 'הצעה') }}">{{ t.status }}</span>
+        <span class="status status-{{ t.status }}">{{ t.status }}</span>
       </div>
       {% if t.description %}<p class="desc">{{ t.description }}</p>{% endif %}
 
@@ -84,7 +84,7 @@
         {% if t.assignee_name %}<span class="tag proposer">אחראי: {{ t.assignee_name }}</span>{% else %}<span class="tag">לא שויך</span>{% endif %}
         <span class="prio {{ t.priority }}">עדיפות: {{ t.priority or 'בינונית' }}</span>
         {% if t.due_date %}
-          {% set overdue = t.due_date < today and t.status != 'הושלם' %}
+          {% set overdue = t.due_date < today and t.status != 'בוצע' %}
           <span class="tag" style="{{ 'background:var(--err-soft);color:var(--err)' if overdue }}">
             יעד: {{ t.due_date.strftime('%d/%m/%Y') }}{{ ' · באיחור' if overdue }}
           </span>

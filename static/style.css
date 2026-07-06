@@ -269,3 +269,8 @@ select[multiple] { padding: 4px; }
 .status-לביצוע { background: #eef0f4; color: #5b6172; }
 .status-בתהליך { background: #e6eefb; color: var(--brand); }
 .status-הושלם { background: #e2f0e8; color: #156c3a; }
+
+/* ---------- Unified status colors ---------- */
+.status-חדש { background: #eef0f4; color: #5b6172; }
+.status-בתהליך { background: #e6eefb; color: var(--brand); }
+.status-בוצע { background: #e2f0e8; color: #156c3a; }

@@ -37,12 +37,12 @@ app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024  # מגבלת העלאה: 15
 
 db = SQLAlchemy(app)
 
-# מצבי דרישה ועדיפויות (ניתן להרחיב)
-STATUSES = ["הצעה", "בפיתוח", "הושלמה"]
+# סטטוס אחיד לדרישות, משימות ובאגים
+STATUSES = ["חדש", "בתהליך", "בוצע"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.8 · עדיפות וחיפוש כללי"
+APP_VERSION = "גרסה 3.9 · סטטוס אחיד"
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ class Requirement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(300), nullable=False)
     description = db.Column(db.Text, default="")
-    status = db.Column(db.String(40), default="הצעה")
+    status = db.Column(db.String(40), default="חדש")
     priority = db.Column(db.String(40), default="בינונית")
 
     module_id = db.Column(db.Integer, db.ForeignKey("module.id"), nullable=True)
@@ -142,7 +142,7 @@ class Bug(db.Model):
     description = db.Column(db.Text, default="")               # תיאור הבאג
     solution = db.Column(db.Text, default="")                  # רעיון לפתרון
     requirement_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)  # קישור לדרישה
-    status = db.Column(db.String(20), default="פתוח")          # פתוח / סגור
+    status = db.Column(db.String(20), default="חדש")           # חדש / בתהליך / בוצע
     priority = db.Column(db.String(40), default="בינונית")     # עדיפות
 
     assignee_id = db.Column(db.Integer, nullable=True)         # אחראי על הבאג (מזהה)
@@ -172,7 +172,7 @@ class BugComment(db.Model):
     )
 
 
-BUG_STATUSES = ["פתוח", "סגור"]
+BUG_STATUSES = STATUSES
 
 
 class Task(db.Model):
@@ -182,7 +182,7 @@ class Task(db.Model):
     assignee_id = db.Column(db.Integer, nullable=True)         # אחראי (מזהה)
     assignee_name = db.Column(db.String(120), default="")      # אחראי (שם לתצוגה)
     due_date = db.Column(db.Date, nullable=True)               # תאריך יעד
-    status = db.Column(db.String(20), default="לביצוע")        # לביצוע / בתהליך / הושלם
+    status = db.Column(db.String(20), default="חדש")           # חדש / בתהליך / בוצע
     priority = db.Column(db.String(40), default="בינונית")     # עדיפות
 
     created_by_id = db.Column(db.Integer, nullable=True)
@@ -190,7 +190,7 @@ class Task(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-TASK_STATUSES = ["לביצוע", "בתהליך", "הושלם"]
+TASK_STATUSES = STATUSES
 
 
 class Attachment(db.Model):
@@ -426,7 +426,7 @@ def requirement_add():
     req = Requirement(
         title=title,
         description=request.form.get("description", "").strip(),
-        status=request.form.get("status") or "הצעה",
+        status=request.form.get("status") or "חדש",
         priority=request.form.get("priority") or "בינונית",
         module_id=module_id,
         proposer_id=proposer_id,
@@ -624,7 +624,7 @@ def search():
             })
 
     users = User.query.order_by(User.display_name).all()
-    all_statuses = STATUSES + BUG_STATUSES + TASK_STATUSES
+    all_statuses = STATUSES
     searched = bool(q or type_f or status_f or priority_f or assignee_f)
     return render_template(
         "search.html", results=results, users=users,
@@ -653,7 +653,7 @@ def bugs():
     bug_list = query.order_by(Bug.status.desc(), Bug.created_at.desc()).all()
     requirements = Requirement.query.order_by(Requirement.title).all()
     users = User.query.order_by(User.display_name).all()
-    open_count = Bug.query.filter_by(status="פתוח").count()
+    open_count = Bug.query.filter(Bug.status != "בוצע").count()
     return render_template(
         "bugs.html",
         bugs=bug_list,
@@ -701,7 +701,7 @@ def bug_add():
         description=request.form.get("description", "").strip(),
         solution=request.form.get("solution", "").strip(),
         requirement_id=request.form.get("requirement_id", type=int) or None,
-        status="פתוח",
+        status="חדש",
         priority=request.form.get("priority") or "בינונית",
         assignee_id=assignee_id,
         assignee_name=assignee_name,
@@ -936,7 +936,7 @@ def tasks():
         query = query.filter_by(priority=priority_filter)
     task_list = query.order_by(Task.status, Task.due_date.is_(None), Task.due_date).all()
     users = User.query.order_by(User.display_name).all()
-    open_count = Task.query.filter(Task.status != "הושלם").count()
+    open_count = Task.query.filter(Task.status != "בוצע").count()
     return render_template(
         "tasks.html",
         tasks=task_list,
@@ -970,7 +970,7 @@ def task_add():
         assignee_id=assignee_id,
         assignee_name=assignee_name,
         due_date=_parse_date(request.form.get("due_date")),
-        status=request.form.get("status") or "לביצוע",
+        status=request.form.get("status") or "חדש",
         priority=request.form.get("priority") or "בינונית",
         created_by_id=me.id,
         created_by_name=me.display_name,
@@ -1230,21 +1230,33 @@ def ensure_schema():
 
 def migrate_statuses():
     """
-    המרת סטטוסים ישנים של דרישות ל'הצעה' (כל מה שאינו הושלמה/בפיתוח),
-    ומילוי עדיפות ברירת מחדל 'בינונית' לבאגים ומשימות קיימים.
-    שומר על הנתונים — רק מעדכן ערכים חסרים/ישנים. אידמפוטנטי.
+    איחוד סטטוסים לשלושה משותפים (חדש / בתהליך / בוצע) בכל שלושת הסוגים,
+    ומילוי עדיפות ברירת מחדל 'בינונית'. שומר על הנתונים — רק מעדכן ערכים.
+    אידמפוטנטי (אפשר להריץ בכל עלייה).
     """
     from sqlalchemy import text
-    try:
-        changed = Requirement.query.filter(
-            ~Requirement.status.in_(STATUSES)
-        ).update({"status": "הצעה"}, synchronize_session=False)
-        if changed:
+    mappings = {
+        "requirement": {"הצעה": "חדש", "בבדיקה": "בתהליך", "אושרה": "בתהליך",
+                         "בפיתוח": "בתהליך", "הושלמה": "בוצע", "נדחתה": "בוצע"},
+        "bug":         {"פתוח": "חדש", "סגור": "בוצע"},
+        "task":        {"לביצוע": "חדש", "בתהליך": "בתהליך", "הושלם": "בוצע"},
+    }
+    for table, m in mappings.items():
+        try:
+            for old, new in m.items():
+                db.session.execute(
+                    text(f"UPDATE \"{table}\" SET status=:new WHERE status=:old"),
+                    {"new": new, "old": old},
+                )
+            # כל ערך שאינו אחד מהשלושה החדשים → 'חדש'
+            db.session.execute(text(
+                f"UPDATE \"{table}\" SET status='חדש' "
+                f"WHERE status IS NULL OR status NOT IN ('חדש','בתהליך','בוצע')"
+            ))
             db.session.commit()
-            print(f"[migrate] {changed} דרישות עם סטטוס ישן הומרו ל'הצעה'")
-    except Exception as e:
-        db.session.rollback()
-        print(f"[migrate] דילוג על המרת סטטוסים: {e}")
+        except Exception as e:
+            db.session.rollback()
+            print(f"[migrate] דילוג על איחוד סטטוס ב-{table}: {e}")
     # מילוי עדיפות ריקה בבאגים ומשימות
     for table in ("bug", "task"):
         try:

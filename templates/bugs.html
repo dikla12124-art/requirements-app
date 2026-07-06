@@ -74,10 +74,10 @@
   {% if bugs %}
   <div class="req-list">
     {% for b in bugs %}
-    <div class="req-card" style="{{ 'opacity:.7' if b.status=='סגור' }}">
+    <div class="req-card" style="{{ 'opacity:.7' if b.status=='בוצע' }}">
       <div class="row1">
         <h3><a href="{{ url_for('bug_detail', bug_id=b.id) }}?back={{ request.full_path|urlencode }}">{{ b.title }}</a></h3>
-        <span class="status status-{{ 'הושלמה' if b.status=='סגור' else 'בבדיקה' }}">{{ b.status }}</span>
+        <span class="status status-{{ b.status }}">{{ b.status }}</span>
       </div>
       {% if b.description %}<p class="desc">{{ b.description }}</p>{% endif %}
       {% if b.solution %}<p class="desc"><strong>רעיון לפתרון:</strong> {{ b.solution }}</p>{% endif %}
@@ -93,17 +93,11 @@
 
       <div class="req-meta" style="margin-top:12px;gap:6px">
         <!-- שינוי סטטוס -->
-        {% if b.status == 'פתוח' %}
         <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=b.id) }}">
-          <input type="hidden" name="status" value="סגור">
-          <button class="btn sm" type="submit">סגירת באג</button>
+          <select name="status" onchange="this.form.submit()" style="width:auto;padding:6px 10px;font-size:13.5px">
+            {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if b.status==s }}>{{ s }}</option>{% endfor %}
+          </select>
         </form>
-        {% else %}
-        <form class="inline-form" method="post" action="{{ url_for('bug_status', bug_id=b.id) }}">
-          <input type="hidden" name="status" value="פתוח">
-          <button class="btn ghost sm" type="submit">פתיחה מחדש</button>
-        </form>
-        {% endif %}
 
         <!-- עריכה -->
         <details style="display:inline-block">
