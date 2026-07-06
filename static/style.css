@@ -274,3 +274,9 @@ select[multiple] { padding: 4px; }
 .status-חדש { background: #eef0f4; color: #5b6172; }
 .status-בתהליך { background: #e6eefb; color: var(--brand); }
 .status-בוצע { background: #e2f0e8; color: #156c3a; }
+
+/* ---------- New-logs red dot ---------- */
+.log-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--err); vertical-align: super;
+}

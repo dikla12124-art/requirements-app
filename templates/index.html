@@ -7,6 +7,22 @@
       <h1>רשימת הדרישות</h1>
       <p class="sub">סך הכל {{ requirements|length }} דרישות ראשיות</p>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <a class="btn ghost sm" href="{{ url_for('requirements_export') }}">⬇ ייצוא לאקסל</a>
+      <details style="display:inline-block">
+        <summary class="btn ghost sm" style="list-style:none">⬆ ייבוא מאקסל</summary>
+        <div class="panel" style="margin-top:10px;min-width:280px;position:absolute;z-index:40">
+          <p style="font-size:13px;color:var(--ink-soft);margin:0 0 10px">
+            קובץ .xlsx באותו פורמט של הייצוא. שורות ללא כותרת ידולגו.
+            קישור אב-ילד נשמר לפי עמודת "דרישת אב (מזהה)".
+          </p>
+          <form method="post" action="{{ url_for('requirements_import') }}" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center">
+            <input type="file" name="file" accept=".xlsx" required style="flex:1">
+            <button class="btn sm" type="submit">ייבוא</button>
+          </form>
+        </div>
+      </details>
+    </div>
   </div>
 
   <!-- הוספת דרישה -->

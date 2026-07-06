@@ -40,7 +40,7 @@
     {% for r in results %}
     <div class="req-card">
       <div class="row1">
-        <h3><a href="{{ r.url }}">{{ r.title }}</a></h3>
+        <h3><a href="{{ r.url }}?back={{ request.full_path|urlencode }}">{{ r.title }}</a></h3>
         <div style="display:flex;gap:6px;align-items:center">
           <span class="tag children">{{ r.type }}</span>
           <span class="status status-{{ r.status }}">{{ r.status }}</span>

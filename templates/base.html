@@ -18,14 +18,14 @@
       <span style="font-size:11px;font-weight:600;color:#1f8a4c;background:#e6f4ec;padding:2px 8px;border-radius:999px;margin-inline-start:6px">{{ app_version }}</span>
     </a>
     <nav class="mainnav">
-      <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">דרישות</a>
-      <a href="{{ url_for('tasks') }}" class="{{ 'active' if request.endpoint == 'tasks' }}">משימות</a>
-      <a href="{{ url_for('bugs') }}" class="{{ 'active' if request.endpoint == 'bugs' }}">באגים</a>
+      <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">דרישות{% if nav.req %} <span class="notif-badge">{{ nav.req }}</span>{% endif %}</a>
+      <a href="{{ url_for('tasks') }}" class="{{ 'active' if request.endpoint == 'tasks' }}">משימות{% if nav.task %} <span class="notif-badge">{{ nav.task }}</span>{% endif %}</a>
+      <a href="{{ url_for('bugs') }}" class="{{ 'active' if request.endpoint == 'bugs' }}">באגים{% if nav.bug %} <span class="notif-badge">{{ nav.bug }}</span>{% endif %}</a>
       <a href="{{ url_for('search') }}" class="{{ 'active' if request.endpoint == 'search' }}">חיפוש כללי</a>
       <a href="{{ url_for('modules') }}" class="{{ 'active' if request.endpoint == 'modules' }}">מודולים</a>
       {% if current_user.is_admin %}
       <a href="{{ url_for('admin') }}" class="{{ 'active' if request.endpoint == 'admin' }}">משתמשים</a>
-      <a href="{{ url_for('activity_log') }}" class="{{ 'active' if request.endpoint == 'activity_log' }}">לוג</a>
+      <a href="{{ url_for('activity_log') }}" class="{{ 'active' if request.endpoint == 'activity_log' }}" style="position:relative">לוג{% if nav.logs_new %} <span class="log-dot" title="יש פעולות חדשות"></span>{% endif %}</a>
       {% endif %}
       <a href="{{ url_for('notifications') }}" class="{{ 'active' if request.endpoint == 'notifications' }}" style="position:relative">
         התראות{% if unread_count %} <span class="notif-badge">{{ unread_count }}</span>{% endif %}

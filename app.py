@@ -42,7 +42,7 @@ STATUSES = ["חדש", "בתהליך", "בוצע"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.9 · סטטוס אחיד"
+APP_VERSION = "גרסה 3.11 · מונים, לוג חדש ואקסל"
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +55,7 @@ class User(db.Model):
     phone = db.Column(db.String(40), default="")  # לטובת התראות וואטסאפ בעתיד
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    log_seen_at = db.Column(db.DateTime, nullable=True)  # מתי המשתמש צפה בלוג לאחרונה
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     proposed = db.relationship(
@@ -280,9 +281,22 @@ def current_user():
 def inject_user():
     u = current_user()
     unread = 0
+    nav = {"req": 0, "bug": 0, "task": 0, "logs_new": False}
     if u:
         unread = Notification.query.filter_by(user_id=u.id, is_read=False).count()
-    return {"current_user": u, "unread_count": unread, "app_version": APP_VERSION}
+        # מונה פריטים שלא בוצעו לכל טאב
+        nav["req"] = Requirement.query.filter(
+            Requirement.parent_id.is_(None), Requirement.status != "בוצע"
+        ).count()
+        nav["bug"] = Bug.query.filter(Bug.status != "בוצע").count()
+        nav["task"] = Task.query.filter(Task.status != "בוצע").count()
+        # אינדיקציית לוג חדש (לאדמין בלבד): רשומות חדשות ממשתמש אחר
+        if u.is_admin:
+            q = ActionLog.query.filter(ActionLog.user_id != u.id)
+            if u.log_seen_at:
+                q = q.filter(ActionLog.timestamp > u.log_seen_at)
+            nav["logs_new"] = db.session.query(q.exists()).scalar()
+    return {"current_user": u, "unread_count": unread, "app_version": APP_VERSION, "nav": nav}
 
 
 @app.template_filter("israel_time")
@@ -386,6 +400,140 @@ def index():
         implementer_filter=implementer_filter,
         priority_filter=priority_filter,
     )
+
+
+# ---------------------------------------------------------------------------
+# ייצוא וייבוא דרישות — Excel
+# ---------------------------------------------------------------------------
+EXCEL_HEADERS = ["מזהה", "כותרת", "תיאור", "סטטוס", "עדיפות", "מודול",
+                 "מי הציע", "מי מימש", "דרישת אב (מזהה)", "נוצרה בתאריך"]
+
+
+@app.route("/requirements/export")
+@login_required
+def requirements_export():
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "דרישות"
+    ws.sheet_view.rightToLeft = True
+    ws.append(EXCEL_HEADERS)
+    # כל הדרישות: אבות קודם ואז ילדים, כדי שהייבוא יוכל לקשר
+    all_reqs = Requirement.query.order_by(
+        Requirement.parent_id.isnot(None), Requirement.id
+    ).all()
+    for r in all_reqs:
+        ws.append([
+            r.id,
+            r.title,
+            r.description or "",
+            r.status or "",
+            r.priority or "",
+            r.module.name if r.module else "",
+            r.proposer.display_name if r.proposer else "",
+            r.implementer_name or "",
+            r.parent_id or "",
+            r.created_at.strftime("%d/%m/%Y") if r.created_at else "",
+        ])
+    # רוחב עמודות סביר
+    for col, w in zip("ABCDEFGHIJ", (8, 40, 50, 12, 12, 18, 18, 18, 16, 14)):
+        ws.column_dimensions[col].width = w
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    log_action("ייצוא דרישות לאקסל", f"{len(all_reqs)} דרישות")
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="requirements.xlsx",
+    )
+
+
+@app.route("/requirements/import", methods=["POST"])
+@login_required
+def requirements_import():
+    from openpyxl import load_workbook
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("לא נבחר קובץ", "error")
+        return redirect(url_for("index"))
+    try:
+        wb = load_workbook(f, data_only=True)
+        ws = wb.active
+    except Exception:
+        flash("הקובץ אינו קובץ אקסל תקין (.xlsx)", "error")
+        return redirect(url_for("index"))
+
+    rows = list(ws.iter_rows(min_row=2, values_only=True))
+    me = current_user()
+    users_by_name = {u.display_name: u for u in User.query.all()}
+    modules_by_name = {m.name: m for m in Module.query.all()}
+
+    id_map = {}   # מזהה מהקובץ -> דרישה חדשה (לקישור אב-ילד)
+    created = 0
+    skipped = 0
+    # שני מעברים: קודם דרישות-אב (ללא אב), ואז ילדים
+    def row_get(row, i):
+        return (str(row[i]).strip() if i < len(row) and row[i] is not None else "")
+
+    parsed = []
+    for row in rows:
+        title = row_get(row, 1)
+        if not title:
+            skipped += 1
+            continue
+        parsed.append({
+            "file_id": row_get(row, 0),
+            "title": title,
+            "description": row_get(row, 2),
+            "status": row_get(row, 3) if row_get(row, 3) in STATUSES else "חדש",
+            "priority": row_get(row, 4) if row_get(row, 4) in PRIORITIES else "בינונית",
+            "module": row_get(row, 5),
+            "proposer": row_get(row, 6),
+            "implementer": row_get(row, 7),
+            "parent_file_id": row_get(row, 8),
+        })
+
+    for phase_parents in (True, False):
+        for p in parsed:
+            is_parent = not p["parent_file_id"]
+            if is_parent != phase_parents:
+                continue
+            module = modules_by_name.get(p["module"])
+            # מודול חדש נוצר אוטומטית אם לא קיים
+            if p["module"] and not module:
+                module = Module(name=p["module"])
+                db.session.add(module)
+                db.session.flush()
+                modules_by_name[p["module"]] = module
+            proposer = users_by_name.get(p["proposer"])
+            implementer = users_by_name.get(p["implementer"])
+            parent_id = None
+            if p["parent_file_id"]:
+                parent = id_map.get(p["parent_file_id"])
+                parent_id = parent.id if parent else None
+            req = Requirement(
+                title=p["title"],
+                description=p["description"],
+                status=p["status"],
+                priority=p["priority"],
+                module_id=module.id if module else None,
+                proposer_id=proposer.id if proposer else None,
+                implementer_id=implementer.id if implementer else None,
+                implementer_name=implementer.display_name if implementer else (p["implementer"] or ""),
+                parent_id=parent_id,
+                created_by_id=me.id,
+            )
+            db.session.add(req)
+            db.session.flush()
+            if p["file_id"]:
+                id_map[p["file_id"]] = req
+            created += 1
+    db.session.commit()
+    log_action("ייבוא דרישות מאקסל", f"{created} נוספו, {skipped} דולגו")
+    flash(f"ייבוא הושלם: {created} דרישות נוספו" + (f", {skipped} שורות דולגו (ללא כותרת)" if skipped else ""), "ok")
+    return redirect(url_for("index"))
 
 
 @app.route("/requirement/<int:req_id>")
@@ -1183,6 +1331,10 @@ def activity_log():
         query = query.filter_by(user_id=user_filter)
     entries = query.order_by(ActionLog.timestamp.desc()).limit(500).all()
     users = User.query.order_by(User.display_name).all()
+    # סימון שהלוג נצפה — כדי לאפס את הנקודה האדומה
+    me = current_user()
+    me.log_seen_at = datetime.utcnow()
+    db.session.commit()
     return render_template(
         "log.html", entries=entries, users=users, user_filter=user_filter
     )
@@ -1203,6 +1355,7 @@ def ensure_schema():
     # (טבלה, עמודה, סוג) — כל אלה תוספות בלבד
     needed = [
         ("user", "phone", "VARCHAR(40)"),
+        ("user", "log_seen_at", "TIMESTAMP"),
         ("bug", "assignee_id", "INTEGER"),
         ("bug", "assignee_name", "VARCHAR(120)"),
         ("notification", "bug_id", "INTEGER"),
