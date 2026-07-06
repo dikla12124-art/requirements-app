@@ -19,6 +19,11 @@
         נוצרה ב-{{ req.created_at.strftime('%d/%m/%Y') }}
         {% if req.creator %} · הוזנה ע"י {{ req.creator.display_name }}{% endif %}
       </p>
+      <div class="req-meta" style="margin-top:8px">
+        {% if req.proposer %}<span class="tag proposer">הציע/ה: {{ req.proposer.display_name }}</span>{% endif %}
+        {% if req.implementer_name %}<span class="tag proposer">מימש/ה: {{ req.implementer_name }}</span>{% endif %}
+        {% if req.module %}<span class="tag"><span class="swatch" style="background:{{ req.module.color }}"></span>{{ req.module.name }}</span>{% endif %}
+      </div>
     </div>
     <form class="inline-form" method="post" action="{{ url_for('requirement_delete', req_id=req.id) }}"
           onsubmit="return confirm('למחוק את הדרישה{% if req.children %} ואת כל תתי-הדרישות שלה{% endif %}?');">
@@ -125,24 +130,22 @@
       {% endif %}
 
       <div class="panel" style="margin-top:14px">
+        <div class="mention-hint">לתיוג משתמש: הקלד/י <strong>@</strong> ואז את השם, ובחר/י מהרשימה שתופיע. המתויגים יקבלו התראה.</div>
         <form method="post" action="{{ url_for('comment_add', req_id=req.id) }}">
-          <div class="field">
+          <div class="field mention-wrap">
             <label>הודעה חדשה</label>
-            <textarea name="body" required placeholder="כתבי הודעה..."></textarea>
-          </div>
-          <div class="field">
-            <label>תיוג משתמשים (יקבלו התראה)</label>
-            <select name="tagged" multiple size="4" style="height:auto">
-              {% for u in users if u.id != current_user.id %}
-              <option value="{{ u.id }}">{{ u.display_name }}{% if u.phone %} · {{ u.phone }}{% endif %}</option>
-              {% endfor %}
-            </select>
-            <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0">לבחירת כמה אנשים — להחזיק Ctrl (או Cmd) בזמן הלחיצה.</p>
+            <textarea name="body" data-mention required placeholder="כתבי הודעה... (לתיוג: @שם)"></textarea>
           </div>
           <button class="btn" type="submit">שליחה</button>
         </form>
       </div>
     </div>
+
+    <script>
+      window.MENTION_USERS = [
+        {% for u in users %}{ id: {{ u.id }}, name: {{ u.display_name|tojson }}, username: {{ u.username|tojson }} }{{ "," if not loop.last }}{% endfor %}
+      ];
+    </script>
 
     <!-- עריכה -->
     <div class="panel">
@@ -168,6 +171,13 @@
           <select name="proposer_id">
             <option value="">— לא צוין —</option>
             {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if req.proposer_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>מי מימש/ה</label>
+          <select name="implementer_id">
+            <option value="">— לא צוין —</option>
+            {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if req.implementer_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
           </select>
         </div>
         <div class="field">

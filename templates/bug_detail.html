@@ -62,24 +62,22 @@
       {% endif %}
 
       <div class="panel" style="margin-top:14px">
+        <div class="mention-hint">לתיוג משתמש: הקלד/י <strong>@</strong> ואז את השם, ובחר/י מהרשימה שתופיע. המתויגים יקבלו התראה.</div>
         <form method="post" action="{{ url_for('bug_comment_add', bug_id=bug.id) }}">
-          <div class="field">
+          <div class="field mention-wrap">
             <label>הודעה חדשה</label>
-            <textarea name="body" required placeholder="כתבי הודעה..."></textarea>
-          </div>
-          <div class="field">
-            <label>תיוג משתמשים (יקבלו התראה)</label>
-            <select name="tagged" multiple size="4" style="height:auto">
-              {% for u in users if u.id != current_user.id %}
-              <option value="{{ u.id }}">{{ u.display_name }}{% if u.phone %} · {{ u.phone }}{% endif %}</option>
-              {% endfor %}
-            </select>
-            <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0">לבחירת כמה אנשים — להחזיק Ctrl (או Cmd) בזמן הלחיצה.</p>
+            <textarea name="body" data-mention required placeholder="כתבי הודעה... (לתיוג: @שם)"></textarea>
           </div>
           <button class="btn" type="submit">שליחה</button>
         </form>
       </div>
     </div>
+
+    <script>
+      window.MENTION_USERS = [
+        {% for u in users %}{ id: {{ u.id }}, name: {{ u.display_name|tojson }}, username: {{ u.username|tojson }} }{{ "," if not loop.last }}{% endfor %}
+      ];
+    </script>
 
     <!-- עריכה -->
     <div class="panel">

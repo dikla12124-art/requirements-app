@@ -38,6 +38,13 @@
             </select>
           </div>
           <div class="field">
+            <label>מי מימש</label>
+            <select name="implementer_id">
+              <option value="">— לא צוין —</option>
+              {% for u in users %}<option value="{{ u.id }}">{{ u.display_name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
             <label>סטטוס</label>
             <select name="status">
               {% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
@@ -65,7 +72,15 @@
       <option value="">כל הסטטוסים</option>
       {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
     </select>
-    {% if module_filter or status_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי סינון</a>{% endif %}
+    <select name="proposer" onchange="this.form.submit()">
+      <option value="">כל המציעים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if proposer_filter==u.id }}>הציע: {{ u.display_name }}</option>{% endfor %}
+    </select>
+    <select name="implementer" onchange="this.form.submit()">
+      <option value="">כל המממשים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if implementer_filter==u.id }}>מימש: {{ u.display_name }}</option>{% endfor %}
+    </select>
+    {% if module_filter or status_filter or proposer_filter or implementer_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי סינון</a>{% endif %}
   </form>
 
   <!-- רשימה -->
@@ -81,6 +96,7 @@
       <div class="req-meta">
         {% if r.module %}<span class="tag"><span class="swatch" style="background:{{ r.module.color }}"></span>{{ r.module.name }}</span>{% endif %}
         {% if r.proposer %}<span class="tag proposer">הציע/ה: {{ r.proposer.display_name }}</span>{% endif %}
+        {% if r.implementer_name %}<span class="tag proposer">מימש/ה: {{ r.implementer_name }}</span>{% endif %}
         {% if r.children %}<span class="tag children">{{ r.children|length }} תתי-דרישות</span>{% endif %}
         <span class="prio {{ r.priority }}">עדיפות: {{ r.priority }}</span>
       </div>

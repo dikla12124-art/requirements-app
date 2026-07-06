@@ -40,7 +40,7 @@ STATUSES = ["הצעה", "בבדיקה", "אושרה", "בפיתוח", "הושל�
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.3 · אחראי וצ'אט לבאגים"
+APP_VERSION = "גרסה 3.4 · מי מימש, חיפוש ותיוג @"
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +83,8 @@ class Requirement(db.Model):
 
     module_id = db.Column(db.Integer, db.ForeignKey("module.id"), nullable=True)
     proposer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    implementer_id = db.Column(db.Integer, nullable=True)      # מי מימש (מזהה)
+    implementer_name = db.Column(db.String(120), default="")   # מי מימש (שם לתצוגה)
     parent_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)
 
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -216,6 +218,26 @@ def log_action(action, target="", details=""):
     db.session.commit()
 
 
+def parse_mentions(body, exclude_id=None):
+    """
+    מחזירה רשימת מזהי משתמשים שאוזכרו בטקסט בעזרת @שם.
+    תואמת שמות מלאים (כולל רווחים). שמות ארוכים נבדקים קודם כדי
+    שאזכור של '@יוסי כהן' לא ייתפס בטעות גם כ'@יוסי'.
+    """
+    if not body or "@" not in body:
+        return []
+    work = body
+    ids = []
+    users = sorted(User.query.all(), key=lambda u: len(u.display_name), reverse=True)
+    for u in users:
+        token = "@" + u.display_name
+        if token in work:
+            work = work.replace(token, " ")
+            if not (exclude_id and u.id == exclude_id):
+                ids.append(u.id)
+    return ids
+
+
 # ---------------------------------------------------------------------------
 # אימות והרשאות
 # ---------------------------------------------------------------------------
@@ -304,12 +326,18 @@ def logout():
 def index():
     module_filter = request.args.get("module", type=int)
     status_filter = request.args.get("status", "")
+    proposer_filter = request.args.get("proposer", type=int)
+    implementer_filter = request.args.get("implementer", type=int)
 
     query = Requirement.query.filter_by(parent_id=None)
     if module_filter:
         query = query.filter_by(module_id=module_filter)
     if status_filter:
         query = query.filter_by(status=status_filter)
+    if proposer_filter:
+        query = query.filter_by(proposer_id=proposer_filter)
+    if implementer_filter:
+        query = query.filter_by(implementer_id=implementer_filter)
 
     requirements = query.order_by(Requirement.created_at.desc()).all()
     modules = Module.query.order_by(Module.name).all()
@@ -323,6 +351,8 @@ def index():
         priorities=PRIORITIES,
         module_filter=module_filter,
         status_filter=status_filter,
+        proposer_filter=proposer_filter,
+        implementer_filter=implementer_filter,
     )
 
 
@@ -355,6 +385,11 @@ def requirement_add():
     parent_id = request.form.get("parent_id", type=int)
     module_id = request.form.get("module_id", type=int) or None
     proposer_id = request.form.get("proposer_id", type=int) or None
+    implementer_id = request.form.get("implementer_id", type=int) or None
+    implementer_name = ""
+    if implementer_id:
+        imp = db.session.get(User, implementer_id)
+        implementer_name = imp.display_name if imp else ""
 
     req = Requirement(
         title=title,
@@ -363,6 +398,8 @@ def requirement_add():
         priority=request.form.get("priority") or "בינונית",
         module_id=module_id,
         proposer_id=proposer_id,
+        implementer_id=implementer_id,
+        implementer_name=implementer_name,
         parent_id=parent_id,
         created_by_id=current_user().id,
     )
@@ -387,7 +424,26 @@ def requirement_edit(req_id):
     req.priority = request.form.get("priority") or req.priority
     req.module_id = request.form.get("module_id", type=int) or None
     req.proposer_id = request.form.get("proposer_id", type=int) or None
+    prev_impl = req.implementer_id
+    implementer_id = request.form.get("implementer_id", type=int) or None
+    req.implementer_id = implementer_id
+    if implementer_id:
+        imp = db.session.get(User, implementer_id)
+        req.implementer_name = imp.display_name if imp else ""
+    else:
+        req.implementer_name = ""
     db.session.commit()
+    # התראה לממש אם שויך ושונה מקודם
+    me = current_user()
+    if implementer_id and implementer_id != prev_impl and implementer_id != me.id:
+        target = db.session.get(User, implementer_id)
+        if target:
+            db.session.add(Notification(
+                user_id=target.id, requirement_id=req.id,
+                text=f"{me.display_name} שייך/ה אותך כמממש/ת של \"{req.title}\"",
+            ))
+            send_whatsapp(target.phone, f"שויכת למימוש דרישה: {req.title}")
+            db.session.commit()
     log_action("עריכת דרישה", req.title, f"סטטוס: {req.status}")
     flash("הדרישה עודכנה", "ok")
     return redirect(request.referrer or url_for("requirement_detail", req_id=req_id))
@@ -432,15 +488,9 @@ def comment_add(req_id):
     db.session.commit()
     log_action("תגובה בצ'אט", req.title)
 
-    # אזכורים: כל משתמש שסומן מקבל התראה
-    tagged_ids = request.form.getlist("tagged")
-    for tid in tagged_ids:
-        try:
-            tid = int(tid)
-        except ValueError:
-            continue
-        if tid == me.id:
-            continue
+    # אזכורים בטקסט (@שם) → התראות
+    me_id = me.id
+    for tid in parse_mentions(body, exclude_id=me_id):
         target_user = db.session.get(User, tid)
         if not target_user:
             continue
@@ -632,14 +682,8 @@ def bug_comment_add(bug_id):
     db.session.commit()
     log_action("תגובה בצ'אט באג", bug.title)
 
-    # אזכורים בשיח → התראות
-    for tid in request.form.getlist("tagged"):
-        try:
-            tid = int(tid)
-        except ValueError:
-            continue
-        if tid == me.id:
-            continue
+    # אזכורים בטקסט (@שם) → התראות
+    for tid in parse_mentions(body, exclude_id=me.id):
         target = db.session.get(User, tid)
         if not target:
             continue
@@ -943,6 +987,8 @@ def ensure_schema():
         ("bug", "assignee_id", "INTEGER"),
         ("bug", "assignee_name", "VARCHAR(120)"),
         ("notification", "bug_id", "INTEGER"),
+        ("requirement", "implementer_id", "INTEGER"),
+        ("requirement", "implementer_name", "VARCHAR(120)"),
     ]
     for table, column, coltype in needed:
         try:
