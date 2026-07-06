@@ -44,18 +44,22 @@
     </div>
   </details>
 
-  <!-- סינון -->
-  <form class="filters" method="get">
-    <select name="status" onchange="this.form.submit()">
+  <!-- חיפוש: הקוביות פועלות יחד -->
+  <form class="search-bar" method="get">
+    <span class="search-label">חיפוש:</span>
+    <select name="status">
       <option value="">כל הסטטוסים</option>
       {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
     </select>
-    <select name="assignee" onchange="this.form.submit()">
+    <select name="assignee">
       <option value="">כל האחראים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>{{ u.display_name }}</option>{% endfor %}
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>אחראי: {{ u.display_name }}</option>{% endfor %}
     </select>
-    {% if status_filter or assignee_filter %}<a class="btn ghost sm" href="{{ url_for('tasks') }}">ניקוי סינון</a>{% endif %}
+    <button class="btn sm" type="submit">חיפוש</button>
+    {% if status_filter or assignee_filter %}<a class="btn ghost sm" href="{{ url_for('tasks') }}">ניקוי</a>{% endif %}
   </form>
+
+  <p class="results-count">נמצאו {{ tasks|length }} תוצאות{{ ' (מסונן)' if status_filter or assignee_filter }}</p>
 
   <!-- רשימה -->
   {% if tasks %}

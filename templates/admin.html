@@ -52,6 +52,8 @@
     {% if name_q or phone_q or role_q %}<a class="btn ghost sm" href="{{ url_for('admin') }}">ניקוי</a>{% endif %}
   </form>
 
+  <p class="results-count">נמצאו {{ users|length }} תוצאות{{ ' (מסונן)' if name_q or phone_q or role_q }}</p>
+
   <table>
     <thead><tr><th>שם</th><th>שם משתמש</th><th>טלפון</th><th>תפקיד</th><th>נוצר</th><th></th></tr></thead>
     <tbody>

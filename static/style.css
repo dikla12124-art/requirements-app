@@ -259,3 +259,6 @@ select[multiple] { padding: 4px; }
 .attach-item .att-actions { display: flex; justify-content: space-between; align-items: center; }
 .attach-item .att-actions a { font-size: 12px; }
 .attach-item .att-actions button { background: none; border: none; color: var(--err); cursor: pointer; font-size: 12px; padding: 0; font-family: inherit; }
+
+/* ---------- Results count ---------- */
+.results-count { font-size: 14px; color: var(--ink-soft); font-weight: 600; margin: 0 0 16px; }

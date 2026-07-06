@@ -2,10 +2,11 @@
 {% block title %}{{ req.title }} · ניהול דרישות{% endblock %}
 {% block content %}
 <main>
+  {% set back = request.args.get('back') %}
   <div class="crumbs" style="display:flex;align-items:center;gap:12px">
-    <button type="button" class="btn ghost sm" onclick="history.back()">→ חזרה</button>
+    {% if back %}<a class="btn ghost sm" href="{{ back }}">→ חזרה לתוצאות</a>{% else %}<button type="button" class="btn ghost sm" onclick="history.back()">→ חזרה</button>{% endif %}
     {% if req.parent %}
-      <span><a href="{{ url_for('index') }}">דרישות</a> › <a href="{{ url_for('requirement_detail', req_id=req.parent.id) }}">{{ req.parent.title }}</a> › תת-דרישה</span>
+      <span><a href="{{ url_for('index') }}">דרישות</a> › <a href="{{ url_for('requirement_detail', req_id=req.parent.id) }}{% if back %}?back={{ back|urlencode }}{% endif %}">{{ req.parent.title }}</a> › תת-דרישה</span>
     {% else %}
       <span><a href="{{ url_for('index') }}">דרישות</a> › {{ req.title }}</span>
     {% endif %}
@@ -178,7 +179,7 @@
     {% for c in req.children %}
     <div class="sub-item">
       <div class="row1">
-        <h4><a href="{{ url_for('requirement_detail', req_id=c.id) }}">{{ c.title }}</a></h4>
+        <h4><a href="{{ url_for('requirement_detail', req_id=c.id) }}{% if back %}?back={{ back|urlencode }}{% endif %}">{{ c.title }}</a></h4>
         <span class="status status-{{ c.status }}">{{ c.status }}</span>
       </div>
       {% if c.description %}<p class="desc" style="margin:6px 0 0">{{ c.description }}</p>{% endif %}

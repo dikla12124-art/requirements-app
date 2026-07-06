@@ -60,13 +60,15 @@
     {% if status_filter or assignee_filter %}<a class="btn ghost sm" href="{{ url_for('bugs') }}">ניקוי</a>{% endif %}
   </form>
 
+  <p class="results-count">נמצאו {{ bugs|length }} תוצאות{{ ' (מסונן)' if status_filter or assignee_filter }}</p>
+
   <!-- רשימה -->
   {% if bugs %}
   <div class="req-list">
     {% for b in bugs %}
     <div class="req-card" style="{{ 'opacity:.7' if b.status=='סגור' }}">
       <div class="row1">
-        <h3><a href="{{ url_for('bug_detail', bug_id=b.id) }}">{{ b.title }}</a></h3>
+        <h3><a href="{{ url_for('bug_detail', bug_id=b.id) }}?back={{ request.full_path|urlencode }}">{{ b.title }}</a></h3>
         <span class="status status-{{ 'הושלמה' if b.status=='סגור' else 'בבדיקה' }}">{{ b.status }}</span>
       </div>
       {% if b.description %}<p class="desc">{{ b.description }}</p>{% endif %}

@@ -2,8 +2,9 @@
 {% block title %}{{ bug.title }} · באג{% endblock %}
 {% block content %}
 <main>
+  {% set back = request.args.get('back') %}
   <div class="crumbs" style="display:flex;align-items:center;gap:12px">
-    <button type="button" class="btn ghost sm" onclick="history.back()">→ חזרה</button>
+    {% if back %}<a class="btn ghost sm" href="{{ back }}">→ חזרה לתוצאות</a>{% else %}<button type="button" class="btn ghost sm" onclick="history.back()">→ חזרה</button>{% endif %}
     <span><a href="{{ url_for('bugs') }}">באגים</a> › {{ bug.title }}</span>
   </div>
 
