@@ -38,19 +38,13 @@
     </div>
   </details>
 
-  <!-- חיפוש -->
-  {% set active = 'phone' if phone_q else ('role' if role_q else 'name') %}
+  <!-- חיפוש: הקוביות פועלות יחד -->
   <form class="search-bar" method="get">
     <span class="search-label">חיפוש:</span>
-    <select name="field" class="search-field">
-      <option value="name" {{ 'selected' if active=='name' }}>לפי שם</option>
-      <option value="phone" {{ 'selected' if active=='phone' }}>לפי טלפון</option>
-      <option value="role" {{ 'selected' if active=='role' }}>לפי תפקיד</option>
-    </select>
-    <input type="text" name="name" class="search-val" data-for="name" value="{{ name_q }}" placeholder="הקלד/י שם">
-    <input type="text" name="phone" class="search-val" data-for="phone" value="{{ phone_q }}" placeholder="הקלד/י טלפון">
-    <select name="role" class="search-val" data-for="role">
-      <option value="">— בחר/י תפקיד —</option>
+    <input type="text" name="name" value="{{ name_q }}" placeholder="שם">
+    <input type="text" name="phone" value="{{ phone_q }}" placeholder="טלפון">
+    <select name="role">
+      <option value="">כל התפקידים</option>
       <option value="admin" {{ 'selected' if role_q=='admin' }}>אדמין</option>
       <option value="user" {{ 'selected' if role_q=='user' }}>משתמש</option>
     </select>

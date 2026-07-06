@@ -2,8 +2,9 @@
 {% block title %}{{ bug.title }} · באג{% endblock %}
 {% block content %}
 <main>
-  <div class="crumbs">
-    <a href="{{ url_for('bugs') }}">באגים</a> › {{ bug.title }}
+  <div class="crumbs" style="display:flex;align-items:center;gap:12px">
+    <button type="button" class="btn ghost sm" onclick="history.back()">→ חזרה</button>
+    <span><a href="{{ url_for('bugs') }}">באגים</a> › {{ bug.title }}</span>
   </div>
 
   <div class="page-head">
@@ -14,10 +15,13 @@
         {% if bug.status_changed_at %} · סטטוס שונה ע"י {{ bug.status_changed_by }} ({{ bug.status_changed_at|israel_time }}){% endif %}
       </p>
     </div>
-    <span class="status status-{{ 'הושלמה' if bug.status=='סגור' else 'בבדיקה' }}" style="font-size:15px">{{ bug.status }}</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="status status-{{ 'הושלמה' if bug.status=='סגור' else 'בבדיקה' }}" style="font-size:15px">{{ bug.status }}</span>
+      <button type="button" class="btn ghost sm" onclick="toggleEdit()">עריכה</button>
+    </div>
   </div>
 
-  <div class="detail-grid">
+  <div>
     <!-- פרטים + צ'אט -->
     <div>
       <div class="panel" style="margin-bottom:20px">
@@ -112,8 +116,8 @@
       ];
     </script>
 
-    <!-- עריכה -->
-    <div class="panel">
+    <!-- עריכה (מוסתר עד לחיצה על 'עריכה') -->
+    <div id="editPanel" class="panel" style="display:none;margin-top:20px">
       <h1 style="font-size:18px;margin:0 0 14px;font-family:'Rubik'">עריכת הבאג</h1>
       <form method="post" action="{{ url_for('bug_edit', bug_id=bug.id) }}">
         <div class="field"><label>שם הבאג</label><input type="text" name="title" value="{{ bug.title }}" required></div>
@@ -133,9 +137,21 @@
             {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if bug.assignee_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
           </select>
         </div>
-        <button class="btn" type="submit">שמירת שינויים</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn" type="submit">שמירת שינויים</button>
+          <button type="button" class="btn ghost" onclick="toggleEdit()">ביטול</button>
+        </div>
       </form>
     </div>
   </div>
+
+  <script>
+    function toggleEdit() {
+      var p = document.getElementById('editPanel');
+      var show = p.style.display === 'none';
+      p.style.display = show ? 'block' : 'none';
+      if (show) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  </script>
 </main>
 {% endblock %}

@@ -45,21 +45,16 @@
     </div>
   </details>
 
-  <!-- חיפוש -->
-  {% set active = 'assignee' if assignee_filter else 'status' %}
+  <!-- חיפוש: הקוביות פועלות יחד -->
   <form class="search-bar" method="get">
     <span class="search-label">חיפוש:</span>
-    <select name="field" class="search-field">
-      <option value="status" {{ 'selected' if active=='status' }}>לפי סטטוס</option>
-      <option value="assignee" {{ 'selected' if active=='assignee' }}>לפי אחראי</option>
-    </select>
-    <select name="status" class="search-val" data-for="status">
-      <option value="">— בחר/י סטטוס —</option>
+    <select name="status">
+      <option value="">כל הסטטוסים</option>
       {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
     </select>
-    <select name="assignee" class="search-val" data-for="assignee">
-      <option value="">— בחר/י אחראי —</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>{{ u.display_name }}</option>{% endfor %}
+    <select name="assignee">
+      <option value="">כל האחראים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>אחראי: {{ u.display_name }}</option>{% endfor %}
     </select>
     <button class="btn sm" type="submit">חיפוש</button>
     {% if status_filter or assignee_filter %}<a class="btn ghost sm" href="{{ url_for('bugs') }}">ניקוי</a>{% endif %}
