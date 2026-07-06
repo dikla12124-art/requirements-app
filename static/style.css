@@ -262,3 +262,10 @@ select[multiple] { padding: 4px; }
 
 /* ---------- Results count ---------- */
 .results-count { font-size: 14px; color: var(--ink-soft); font-weight: 600; margin: 0 0 16px; }
+
+/* ---------- Status colors for bugs/tasks ---------- */
+.status-פתוח { background: #fff4e0; color: #a86a12; }
+.status-סגור { background: var(--ok-soft); color: var(--ok); }
+.status-לביצוע { background: #eef0f4; color: #5b6172; }
+.status-בתהליך { background: #e6eefb; color: var(--brand); }
+.status-הושלם { background: #e2f0e8; color: #156c3a; }

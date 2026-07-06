@@ -81,11 +81,15 @@
       <option value="">כל המודולים</option>
       {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if module_filter==m.id }}>{{ m.name }}</option>{% endfor %}
     </select>
+    <select name="priority">
+      <option value="">כל העדיפויות</option>
+      {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if priority_filter==p }}>{{ p }}</option>{% endfor %}
+    </select>
     <button class="btn sm" type="submit">חיפוש</button>
-    {% if module_filter or status_filter or proposer_filter or implementer_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי</a>{% endif %}
+    {% if module_filter or status_filter or proposer_filter or implementer_filter or priority_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי</a>{% endif %}
   </form>
 
-  <p class="results-count">נמצאו {{ requirements|length }} תוצאות{{ ' (מסונן)' if module_filter or status_filter or proposer_filter or implementer_filter }}</p>
+  <p class="results-count">נמצאו {{ requirements|length }} תוצאות{{ ' (מסונן)' if module_filter or status_filter or proposer_filter or implementer_filter or priority_filter }}</p>
 
   <!-- רשימה -->
   {% if requirements %}

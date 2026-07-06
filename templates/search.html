@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}חיפוש כללי · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="page-head">
+    <div><h1>חיפוש כללי</h1><p class="sub">חיפוש בכל המאגר — דרישות, משימות ובאגים יחד</p></div>
+  </div>
+
+  <!-- חיפוש -->
+  <form class="search-bar" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="חיפוש חופשי בכותרת ובתיאור..." style="flex:1;min-width:220px">
+    <select name="type">
+      <option value="">כל הסוגים</option>
+      <option value="requirement" {{ 'selected' if type_f=='requirement' }}>דרישות</option>
+      <option value="task" {{ 'selected' if type_f=='task' }}>משימות</option>
+      <option value="bug" {{ 'selected' if type_f=='bug' }}>באגים</option>
+    </select>
+    <select name="status">
+      <option value="">כל הסטטוסים</option>
+      {% for s in all_statuses %}<option value="{{ s }}" {{ 'selected' if status_f==s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <select name="priority">
+      <option value="">כל העדיפויות</option>
+      {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if priority_f==p }}>{{ p }}</option>{% endfor %}
+    </select>
+    <select name="assignee">
+      <option value="">כל המוקצים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_f==u.id }}>{{ u.display_name }}</option>{% endfor %}
+    </select>
+    <button class="btn sm" type="submit">חיפוש</button>
+    {% if searched %}<a class="btn ghost sm" href="{{ url_for('search') }}">ניקוי</a>{% endif %}
+  </form>
+
+  {% if searched %}
+  <p class="results-count">נמצאו {{ results|length }} תוצאות</p>
+  {% endif %}
+
+  {% if results %}
+  <div class="req-list">
+    {% for r in results %}
+    <div class="req-card">
+      <div class="row1">
+        <h3><a href="{{ r.url }}">{{ r.title }}</a></h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="tag children">{{ r.type }}</span>
+          <span class="status status-{{ r.status }}">{{ r.status }}</span>
+        </div>
+      </div>
+      {% if r.description %}<p class="desc">{{ r.description[:180] }}{{ '…' if r.description|length > 180 }}</p>{% endif %}
+      <div class="req-meta">
+        <span class="prio {{ r.priority }}">עדיפות: {{ r.priority or 'בינונית' }}</span>
+        {% if r.who %}<span class="tag proposer">מוקצה: {{ r.who }}</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif searched %}
+  <div class="empty">לא נמצאו תוצאות התואמות את החיפוש.</div>
+  {% else %}
+  <div class="empty">הזן/י מילות חיפוש או בחר/י סינון כדי להתחיל.</div>
+  {% endif %}
+</main>
+{% endblock %}

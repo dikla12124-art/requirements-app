@@ -21,6 +21,7 @@
       <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">דרישות</a>
       <a href="{{ url_for('tasks') }}" class="{{ 'active' if request.endpoint == 'tasks' }}">משימות</a>
       <a href="{{ url_for('bugs') }}" class="{{ 'active' if request.endpoint == 'bugs' }}">באגים</a>
+      <a href="{{ url_for('search') }}" class="{{ 'active' if request.endpoint == 'search' }}">חיפוש כללי</a>
       <a href="{{ url_for('modules') }}" class="{{ 'active' if request.endpoint == 'modules' }}">מודולים</a>
       {% if current_user.is_admin %}
       <a href="{{ url_for('admin') }}" class="{{ 'active' if request.endpoint == 'admin' }}">משתמשים</a>

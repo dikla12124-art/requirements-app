@@ -31,6 +31,7 @@
         <div class="req-meta">
           {% if bug.requirement %}<a class="tag proposer" href="{{ url_for('requirement_detail', req_id=bug.requirement.id) }}">דרישה: {{ bug.requirement.title }}</a>{% endif %}
           {% if bug.assignee_name %}<span class="tag proposer">אחראי: {{ bug.assignee_name }}</span>{% else %}<span class="tag">לא שויך אחראי</span>{% endif %}
+          <span class="prio {{ bug.priority }}">עדיפות: {{ bug.priority or 'בינונית' }}</span>
         </div>
         <div class="req-meta" style="margin-top:12px;gap:6px">
           {% if bug.status == 'פתוח' %}
@@ -137,6 +138,10 @@
             <option value="">— לא שויך —</option>
             {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if bug.assignee_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
           </select>
+        </div>
+        <div class="field">
+          <label>עדיפות</label>
+          <select name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if bug.priority==p }}>{{ p }}</option>{% endfor %}</select>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn" type="submit">שמירת שינויים</button>

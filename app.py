@@ -42,7 +42,7 @@ STATUSES = ["הצעה", "בפיתוח", "הושלמה"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.7 · מונה תוצאות וחזרה לחיפוש"
+APP_VERSION = "גרסה 3.8 · עדיפות וחיפוש כללי"
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +143,7 @@ class Bug(db.Model):
     solution = db.Column(db.Text, default="")                  # רעיון לפתרון
     requirement_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)  # קישור לדרישה
     status = db.Column(db.String(20), default="פתוח")          # פתוח / סגור
+    priority = db.Column(db.String(40), default="בינונית")     # עדיפות
 
     assignee_id = db.Column(db.Integer, nullable=True)         # אחראי על הבאג (מזהה)
     assignee_name = db.Column(db.String(120), default="")      # אחראי (שם לתצוגה)
@@ -182,6 +183,7 @@ class Task(db.Model):
     assignee_name = db.Column(db.String(120), default="")      # אחראי (שם לתצוגה)
     due_date = db.Column(db.Date, nullable=True)               # תאריך יעד
     status = db.Column(db.String(20), default="לביצוע")        # לביצוע / בתהליך / הושלם
+    priority = db.Column(db.String(40), default="בינונית")     # עדיפות
 
     created_by_id = db.Column(db.Integer, nullable=True)
     created_by_name = db.Column(db.String(120), default="")    # מי פתח
@@ -354,6 +356,7 @@ def index():
     status_filter = request.args.get("status", "")
     proposer_filter = request.args.get("proposer", type=int)
     implementer_filter = request.args.get("implementer", type=int)
+    priority_filter = request.args.get("priority", "")
 
     query = Requirement.query.filter_by(parent_id=None)
     if module_filter:
@@ -364,6 +367,8 @@ def index():
         query = query.filter_by(proposer_id=proposer_filter)
     if implementer_filter:
         query = query.filter_by(implementer_id=implementer_filter)
+    if priority_filter:
+        query = query.filter_by(priority=priority_filter)
 
     requirements = query.order_by(Requirement.created_at.desc()).all()
     modules = Module.query.order_by(Module.name).all()
@@ -379,6 +384,7 @@ def index():
         status_filter=status_filter,
         proposer_filter=proposer_filter,
         implementer_filter=implementer_filter,
+        priority_filter=priority_filter,
     )
 
 
@@ -553,6 +559,81 @@ def notifications():
 
 
 # ---------------------------------------------------------------------------
+# חיפוש כללי — דרישות, משימות ובאגים יחד
+# ---------------------------------------------------------------------------
+@app.route("/search")
+@login_required
+def search():
+    q = request.args.get("q", "").strip()
+    type_f = request.args.get("type", "")       # '' / requirement / task / bug
+    status_f = request.args.get("status", "")
+    priority_f = request.args.get("priority", "")
+    assignee_f = request.args.get("assignee", type=int)
+    results = []
+    like = f"%{q}%"
+
+    if type_f in ("", "requirement"):
+        qr = Requirement.query
+        if q:
+            qr = qr.filter(db.or_(Requirement.title.ilike(like), Requirement.description.ilike(like)))
+        if status_f:
+            qr = qr.filter_by(status=status_f)
+        if priority_f:
+            qr = qr.filter_by(priority=priority_f)
+        if assignee_f:
+            qr = qr.filter_by(implementer_id=assignee_f)
+        for r in qr.all():
+            results.append({
+                "type": "דרישה", "title": r.title, "description": r.description,
+                "status": r.status, "priority": r.priority,
+                "who": r.implementer_name or "", "url": url_for("requirement_detail", req_id=r.id),
+            })
+
+    if type_f in ("", "task"):
+        qt = Task.query
+        if q:
+            qt = qt.filter(db.or_(Task.title.ilike(like), Task.description.ilike(like)))
+        if status_f:
+            qt = qt.filter_by(status=status_f)
+        if priority_f:
+            qt = qt.filter_by(priority=priority_f)
+        if assignee_f:
+            qt = qt.filter_by(assignee_id=assignee_f)
+        for t in qt.all():
+            results.append({
+                "type": "משימה", "title": t.title, "description": t.description,
+                "status": t.status, "priority": t.priority,
+                "who": t.assignee_name or "", "url": url_for("tasks"),
+            })
+
+    if type_f in ("", "bug"):
+        qb = Bug.query
+        if q:
+            qb = qb.filter(db.or_(Bug.title.ilike(like), Bug.description.ilike(like)))
+        if status_f:
+            qb = qb.filter_by(status=status_f)
+        if priority_f:
+            qb = qb.filter_by(priority=priority_f)
+        if assignee_f:
+            qb = qb.filter_by(assignee_id=assignee_f)
+        for b in qb.all():
+            results.append({
+                "type": "באג", "title": b.title, "description": b.description,
+                "status": b.status, "priority": b.priority,
+                "who": b.assignee_name or "", "url": url_for("bug_detail", bug_id=b.id),
+            })
+
+    users = User.query.order_by(User.display_name).all()
+    all_statuses = STATUSES + BUG_STATUSES + TASK_STATUSES
+    searched = bool(q or type_f or status_f or priority_f or assignee_f)
+    return render_template(
+        "search.html", results=results, users=users,
+        priorities=PRIORITIES, all_statuses=all_statuses, searched=searched,
+        q=q, type_f=type_f, status_f=status_f, priority_f=priority_f, assignee_f=assignee_f,
+    )
+
+
+# ---------------------------------------------------------------------------
 # ניהול באגים
 # ---------------------------------------------------------------------------
 @app.route("/bugs")
@@ -560,11 +641,14 @@ def notifications():
 def bugs():
     status_filter = request.args.get("status", "")
     assignee_filter = request.args.get("assignee", type=int)
+    priority_filter = request.args.get("priority", "")
     query = Bug.query
     if status_filter:
         query = query.filter_by(status=status_filter)
     if assignee_filter:
         query = query.filter_by(assignee_id=assignee_filter)
+    if priority_filter:
+        query = query.filter_by(priority=priority_filter)
     # פתוחים קודם, ואז לפי תאריך יורד
     bug_list = query.order_by(Bug.status.desc(), Bug.created_at.desc()).all()
     requirements = Requirement.query.order_by(Requirement.title).all()
@@ -576,8 +660,10 @@ def bugs():
         requirements=requirements,
         users=users,
         statuses=BUG_STATUSES,
+        priorities=PRIORITIES,
         status_filter=status_filter,
         assignee_filter=assignee_filter,
+        priority_filter=priority_filter,
         open_count=open_count,
     )
 
@@ -616,6 +702,7 @@ def bug_add():
         solution=request.form.get("solution", "").strip(),
         requirement_id=request.form.get("requirement_id", type=int) or None,
         status="פתוח",
+        priority=request.form.get("priority") or "בינונית",
         assignee_id=assignee_id,
         assignee_name=assignee_name,
         opened_by_id=me.id,
@@ -640,7 +727,7 @@ def bug_detail(bug_id):
     users = User.query.order_by(User.display_name).all()
     return render_template(
         "bug_detail.html", bug=bug, requirements=requirements,
-        users=users, statuses=BUG_STATUSES,
+        users=users, statuses=BUG_STATUSES, priorities=PRIORITIES,
     )
 
 
@@ -655,6 +742,7 @@ def bug_edit(bug_id):
     bug.title = request.form.get("title", bug.title).strip()
     bug.description = request.form.get("description", "").strip()
     bug.solution = request.form.get("solution", "").strip()
+    bug.priority = request.form.get("priority") or bug.priority
     bug.requirement_id = request.form.get("requirement_id", type=int) or None
     assignee_id = request.form.get("assignee_id", type=int) or None
     bug.assignee_id = assignee_id
@@ -838,11 +926,14 @@ def _parse_date(value):
 def tasks():
     status_filter = request.args.get("status", "")
     assignee_filter = request.args.get("assignee", type=int)
+    priority_filter = request.args.get("priority", "")
     query = Task.query
     if status_filter:
         query = query.filter_by(status=status_filter)
     if assignee_filter:
         query = query.filter_by(assignee_id=assignee_filter)
+    if priority_filter:
+        query = query.filter_by(priority=priority_filter)
     task_list = query.order_by(Task.status, Task.due_date.is_(None), Task.due_date).all()
     users = User.query.order_by(User.display_name).all()
     open_count = Task.query.filter(Task.status != "הושלם").count()
@@ -851,8 +942,10 @@ def tasks():
         tasks=task_list,
         users=users,
         statuses=TASK_STATUSES,
+        priorities=PRIORITIES,
         status_filter=status_filter,
         assignee_filter=assignee_filter,
+        priority_filter=priority_filter,
         open_count=open_count,
         today=date.today(),
     )
@@ -878,6 +971,7 @@ def task_add():
         assignee_name=assignee_name,
         due_date=_parse_date(request.form.get("due_date")),
         status=request.form.get("status") or "לביצוע",
+        priority=request.form.get("priority") or "בינונית",
         created_by_id=me.id,
         created_by_name=me.display_name,
     )
@@ -897,6 +991,7 @@ def task_edit(task_id):
     task.title = request.form.get("title", task.title).strip()
     task.description = request.form.get("description", "").strip()
     task.due_date = _parse_date(request.form.get("due_date"))
+    task.priority = request.form.get("priority") or task.priority
     assignee_id = request.form.get("assignee_id", type=int) or None
     task.assignee_id = assignee_id
     if assignee_id:
@@ -1113,6 +1208,8 @@ def ensure_schema():
         ("notification", "bug_id", "INTEGER"),
         ("requirement", "implementer_id", "INTEGER"),
         ("requirement", "implementer_name", "VARCHAR(120)"),
+        ("bug", "priority", "VARCHAR(40)"),
+        ("task", "priority", "VARCHAR(40)"),
     ]
     for table, column, coltype in needed:
         try:
@@ -1133,10 +1230,11 @@ def ensure_schema():
 
 def migrate_statuses():
     """
-    המרת סטטוסים ישנים של דרישות: כל סטטוס שאינו 'הושלמה' או 'בפיתוח'
-    (למשל 'בבדיקה', 'אושרה', 'נדחתה') הופך ל'הצעה'. שומר על הנתונים —
-    רק מעדכן ערך סטטוס, לא מוחק שום דרישה. פעולה אידמפוטנטית.
+    המרת סטטוסים ישנים של דרישות ל'הצעה' (כל מה שאינו הושלמה/בפיתוח),
+    ומילוי עדיפות ברירת מחדל 'בינונית' לבאגים ומשימות קיימים.
+    שומר על הנתונים — רק מעדכן ערכים חסרים/ישנים. אידמפוטנטי.
     """
+    from sqlalchemy import text
     try:
         changed = Requirement.query.filter(
             ~Requirement.status.in_(STATUSES)
@@ -1147,6 +1245,16 @@ def migrate_statuses():
     except Exception as e:
         db.session.rollback()
         print(f"[migrate] דילוג על המרת סטטוסים: {e}")
+    # מילוי עדיפות ריקה בבאגים ומשימות
+    for table in ("bug", "task"):
+        try:
+            db.session.execute(text(
+                f"UPDATE \"{table}\" SET priority='בינונית' WHERE priority IS NULL OR priority=''"
+            ))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"[migrate] דילוג על מילוי עדיפות ב-{table}: {e}")
 
 
 def init_db():

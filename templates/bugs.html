@@ -37,6 +37,10 @@
           </select>
         </div>
         <div class="field">
+          <label>עדיפות</label>
+          <select name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if p=='בינונית' }}>{{ p }}</option>{% endfor %}</select>
+        </div>
+        <div class="field">
           <label>רעיון לפתרון</label>
           <textarea name="solution" placeholder="הצעה לפתרון (אופציונלי)"></textarea>
         </div>
@@ -56,11 +60,15 @@
       <option value="">כל האחראים</option>
       {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>אחראי: {{ u.display_name }}</option>{% endfor %}
     </select>
+    <select name="priority">
+      <option value="">כל העדיפויות</option>
+      {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if priority_filter==p }}>{{ p }}</option>{% endfor %}
+    </select>
     <button class="btn sm" type="submit">חיפוש</button>
-    {% if status_filter or assignee_filter %}<a class="btn ghost sm" href="{{ url_for('bugs') }}">ניקוי</a>{% endif %}
+    {% if status_filter or assignee_filter or priority_filter %}<a class="btn ghost sm" href="{{ url_for('bugs') }}">ניקוי</a>{% endif %}
   </form>
 
-  <p class="results-count">נמצאו {{ bugs|length }} תוצאות{{ ' (מסונן)' if status_filter or assignee_filter }}</p>
+  <p class="results-count">נמצאו {{ bugs|length }} תוצאות{{ ' (מסונן)' if status_filter or assignee_filter or priority_filter }}</p>
 
   <!-- רשימה -->
   {% if bugs %}
@@ -77,6 +85,7 @@
       <div class="req-meta">
         {% if b.requirement %}<a class="tag proposer" href="{{ url_for('requirement_detail', req_id=b.requirement.id) }}">דרישה: {{ b.requirement.title }}</a>{% endif %}
         {% if b.assignee_name %}<span class="tag proposer">אחראי: {{ b.assignee_name }}</span>{% endif %}
+        <span class="prio {{ b.priority }}">עדיפות: {{ b.priority or 'בינונית' }}</span>
         <span class="tag">נפתח ע"י {{ b.opened_by_name }} · {{ b.created_at|israel_time }}</span>
         {% if b.comments %}<span class="tag children">{{ b.comments|length }} בצ'אט</span>{% endif %}
         {% if b.status_changed_at %}<span class="tag children">סטטוס שונה ע"י {{ b.status_changed_by }} · {{ b.status_changed_at|israel_time }}</span>{% endif %}
