@@ -24,7 +24,8 @@
         <span class="status status-{{ req.status }}">{{ req.status }}</span>
         <span class="prio {{ req.priority }}">עדיפות: {{ req.priority }}</span>
         {% if req.proposer %}<span class="tag proposer">הציע/ה: {{ req.proposer.display_name }}</span>{% endif %}
-        {% if req.implementer_name %}<span class="tag proposer">מימש/ה: {{ req.implementer_name }}</span>{% endif %}
+        {% if req.implementer_name %}<span class="tag proposer">מוקצה לביצוע: {{ req.implementer_name }}</span>{% endif %}
+        {% if req.actual_implementer_name %}<span class="tag" style="background:var(--ok-soft);color:var(--ok)">מימש/ה בפועל: {{ req.actual_implementer_name }}</span>{% endif %}
         {% if req.module %}<span class="tag"><span class="swatch" style="background:{{ req.module.color }}"></span>{{ req.module.name }}</span>{% endif %}
       </div>
     </div>
@@ -54,7 +55,7 @@
           <label>מודול</label>
           <select name="module_id">
             <option value="">— ללא מודול —</option>
-            {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if req.module_id==m.id }}>{{ m.name }}</option>{% endfor %}
+            {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if req.module_id==m.id }}>{{ m.select_label or m.name }}</option>{% endfor %}
           </select>
         </div>
         <div class="field">
@@ -65,7 +66,7 @@
           </select>
         </div>
         <div class="field">
-          <label>מי מימש/ה</label>
+          <label>מוקצה לביצוע</label>
           <select name="implementer_id">
             <option value="">— לא צוין —</option>
             {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if req.implementer_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
@@ -73,7 +74,14 @@
         </div>
         <div class="field">
           <label>סטטוס</label>
-          <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if req.status==s }}>{{ s }}</option>{% endfor %}</select>
+          <select name="status" id="statusSelect" onchange="toggleActualField()">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if req.status==s }}>{{ s }}</option>{% endfor %}</select>
+        </div>
+        <div class="field" id="actualField" style="display:none">
+          <label>מי מימש/ה בפועל <span style="font-weight:400;color:var(--ink-soft)">(ברירת מחדל: המוקצה לביצוע)</span></label>
+          <select name="actual_implementer_id">
+            <option value="">— כמו המוקצה לביצוע —</option>
+            {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if req.actual_implementer_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
+          </select>
         </div>
         <div class="field">
           <label>עדיפות</label>
@@ -157,7 +165,7 @@
             <label>מודול</label>
             <select name="module_id">
               <option value="">— יורש מהאב —</option>
-              {% for m in modules %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+              {% for m in modules %}<option value="{{ m.id }}">{{ m.select_label or m.name }}</option>{% endfor %}
             </select>
           </div>
           <div class="field">
@@ -232,7 +240,14 @@
       var show = p.style.display === 'none';
       p.style.display = show ? 'block' : 'none';
       if (show) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toggleActualField();
     }
+    function toggleActualField() {
+      var sel = document.getElementById('statusSelect');
+      var f = document.getElementById('actualField');
+      if (sel && f) f.style.display = (sel.value === 'בוצע') ? 'block' : 'none';
+    }
+    document.addEventListener('DOMContentLoaded', toggleActualField);
   </script>
 </main>
 {% endblock %}

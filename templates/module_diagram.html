@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}תרשים מודולים · ניהול דרישות{% endblock %}
+{% block content %}
+<main>
+  <div class="crumbs" style="display:flex;align-items:center;gap:12px">
+    <a class="btn ghost sm" href="{{ url_for('modules') }}">→ חזרה למודולים</a>
+    <span><a href="{{ url_for('modules') }}">מודולים</a> › תרשים</span>
+  </div>
+
+  <div class="page-head">
+    <div><h1>תרשים מודולים</h1><p class="sub">היררכיה (קו מקווקו) וקשרים (חץ עם תיאור)</p></div>
+  </div>
+
+  {% if all_modules %}
+  <div class="panel">
+    <svg id="diagram" width="100%" style="min-height:420px;direction:ltr"></svg>
+  </div>
+
+  <script>
+    const MODULES = [
+      {% for m in all_modules %}{ id: {{ m.id }}, name: {{ m.name|tojson }}, color: {{ m.color|tojson }}, parent: {{ m.parent_id or 'null' }} }{{ "," if not loop.last }}{% endfor %}
+    ];
+    const LINKS = [
+      {% for l in links %}{ s: {{ l.source_id }}, t: {{ l.target_id }}, label: {{ (l.label or '')|tojson }} }{{ "," if not loop.last }}{% endfor %}
+    ];
+
+    (function draw() {
+      const svg = document.getElementById('diagram');
+      const NS = 'http://www.w3.org/2000/svg';
+      const tops = MODULES.filter(m => !m.parent);
+      const childrenOf = id => MODULES.filter(m => m.parent === id);
+
+      // פריסה: מודולים ראשיים בעמודות, תתי-מודולים מתחת לאב
+      const COL_W = 210, BOX_W = 170, BOX_H = 44, SUB_H = 36, TOP_Y = 40, SUB_GAP = 14;
+      const pos = {};
+      let maxDepth = 0;
+      tops.forEach((m, i) => {
+        const x = 30 + i * COL_W;
+        pos[m.id] = { x: x, y: TOP_Y, w: BOX_W, h: BOX_H };
+        const kids = childrenOf(m.id);
+        kids.forEach((c, j) => {
+          pos[c.id] = { x: x + 18, y: TOP_Y + BOX_H + 26 + j * (SUB_H + SUB_GAP), w: BOX_W - 30, h: SUB_H };
+          maxDepth = Math.max(maxDepth, j + 1);
+        });
+      });
+      const width = Math.max(700, 60 + tops.length * COL_W);
+      const height = TOP_Y + BOX_H + 60 + maxDepth * (SUB_H + SUB_GAP) + 60;
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.style.minHeight = Math.min(560, height) + 'px';
+
+      // חץ
+      const defs = document.createElementNS(NS, 'defs');
+      defs.innerHTML = '<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6172"/></marker>';
+      svg.appendChild(defs);
+
+      function center(p) { return { x: p.x + p.w / 2, y: p.y + p.h / 2 }; }
+
+      // קווי היררכיה (מקווקו)
+      tops.forEach(m => childrenOf(m.id).forEach(c => {
+        const a = pos[m.id], b = pos[c.id];
+        const ln = document.createElementNS(NS, 'path');
+        ln.setAttribute('d', `M ${a.x + 22} ${a.y + a.h} L ${a.x + 22} ${b.y + b.h / 2} L ${b.x} ${b.y + b.h / 2}`);
+        ln.setAttribute('fill', 'none'); ln.setAttribute('stroke', '#c9d2e6');
+        ln.setAttribute('stroke-width', '1.6'); ln.setAttribute('stroke-dasharray', '5 4');
+        svg.appendChild(ln);
+      }));
+
+      // קשרים (חץ + תווית)
+      LINKS.forEach(l => {
+        const a = pos[l.s], b = pos[l.t];
+        if (!a || !b) return;
+        const c1 = center(a), c2 = center(b);
+        const midX = (c1.x + c2.x) / 2, midY = Math.min(c1.y, c2.y) - 26;
+        const p = document.createElementNS(NS, 'path');
+        p.setAttribute('d', `M ${c1.x} ${a.y} Q ${midX} ${midY} ${c2.x} ${b.y}`);
+        p.setAttribute('fill', 'none'); p.setAttribute('stroke', '#5b6172');
+        p.setAttribute('stroke-width', '1.8'); p.setAttribute('marker-end', 'url(#arr)');
+        svg.appendChild(p);
+        if (l.label) {
+          const t = document.createElementNS(NS, 'text');
+          t.setAttribute('x', midX); t.setAttribute('y', midY + 4);
+          t.setAttribute('text-anchor', 'middle');
+          t.setAttribute('font-size', '11.5'); t.setAttribute('fill', '#5b6172');
+          t.setAttribute('font-family', 'Heebo, sans-serif');
+          t.textContent = l.label;
+          svg.appendChild(t);
+        }
+      });
+
+      // קופסאות
+      MODULES.forEach(m => {
+        const p = pos[m.id]; if (!p) return;
+        const g = document.createElementNS(NS, 'g');
+        const r = document.createElementNS(NS, 'rect');
+        r.setAttribute('x', p.x); r.setAttribute('y', p.y);
+        r.setAttribute('width', p.w); r.setAttribute('height', p.h);
+        r.setAttribute('rx', 10); r.setAttribute('fill', '#ffffff');
+        r.setAttribute('stroke', m.color || '#6b7280'); r.setAttribute('stroke-width', m.parent ? 1.5 : 2.5);
+        g.appendChild(r);
+        const sw = document.createElementNS(NS, 'rect');
+        sw.setAttribute('x', p.x + p.w - 16); sw.setAttribute('y', p.y + 8);
+        sw.setAttribute('width', 9); sw.setAttribute('height', 9); sw.setAttribute('rx', 2.5);
+        sw.setAttribute('fill', m.color || '#6b7280');
+        g.appendChild(sw);
+        const t = document.createElementNS(NS, 'text');
+        t.setAttribute('x', p.x + p.w - 24); t.setAttribute('y', p.y + p.h / 2 + 5);
+        t.setAttribute('text-anchor', 'end');
+        t.setAttribute('font-size', m.parent ? '13' : '14.5');
+        t.setAttribute('font-weight', m.parent ? '500' : '700');
+        t.setAttribute('fill', '#1a1d29'); t.setAttribute('font-family', 'Heebo, sans-serif');
+        t.textContent = m.name;
+        g.appendChild(t);
+        svg.appendChild(g);
+      });
+    })();
+  </script>
+  {% else %}
+  <div class="empty">אין מודולים עדיין — הוסיפי מודולים כדי לראות תרשים.</div>
+  {% endif %}
+</main>
+{% endblock %}

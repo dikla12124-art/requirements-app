@@ -42,7 +42,7 @@ STATUSES = ["חדש", "בתהליך", "בוצע"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.11 · מונים, לוג חדש ואקסל"
+APP_VERSION = "גרסה 3.13 · תרשים מודולים ומימוש בפועל"
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,24 @@ class Module(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), unique=True, nullable=False)
     color = db.Column(db.String(7), default="#6b7280")  # צבע תווית
+    parent_id = db.Column(db.Integer, db.ForeignKey("module.id"), nullable=True)  # מודול-אב
     requirements = db.relationship("Requirement", backref="module")
+    children = db.relationship(
+        "Module",
+        backref=db.backref("parent", remote_side=[id]),
+        foreign_keys=[parent_id],
+    )
+
+
+class ModuleLink(db.Model):
+    """קשר בין שני מודולים (כולל תתי-מודולים), עם תיאור אופציונלי."""
+    id = db.Column(db.Integer, primary_key=True)
+    source_id = db.Column(db.Integer, db.ForeignKey("module.id"), nullable=False)
+    target_id = db.Column(db.Integer, db.ForeignKey("module.id"), nullable=False)
+    label = db.Column(db.String(200), default="")
+    source = db.relationship("Module", foreign_keys=[source_id],
+                             backref=db.backref("links_out", cascade="all, delete-orphan"))
+    target = db.relationship("Module", foreign_keys=[target_id])
 
 
 class Requirement(db.Model):
@@ -86,8 +103,10 @@ class Requirement(db.Model):
 
     module_id = db.Column(db.Integer, db.ForeignKey("module.id"), nullable=True)
     proposer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    implementer_id = db.Column(db.Integer, nullable=True)      # מי מימש (מזהה)
-    implementer_name = db.Column(db.String(120), default="")   # מי מימש (שם לתצוגה)
+    implementer_id = db.Column(db.Integer, nullable=True)      # מוקצה לביצוע (מזהה)
+    implementer_name = db.Column(db.String(120), default="")   # מוקצה לביצוע (שם)
+    actual_implementer_id = db.Column(db.Integer, nullable=True)     # מי מימש בפועל (מזהה)
+    actual_implementer_name = db.Column(db.String(120), default="")  # מי מימש בפועל (שם)
     parent_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)
 
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -231,6 +250,19 @@ def send_whatsapp(phone, message):
         return False
     # --- מקום למימוש Twilio בעתיד ---
     return False
+
+
+def modules_for_select():
+    """רשימת מודולים שטוחה בסדר היררכי: ראשי ואחריו תתי-המודולים שלו,
+    עם שם תצוגה 'אב ← תת' לתתי-מודולים."""
+    result = []
+    for m in Module.query.filter_by(parent_id=None).order_by(Module.name).all():
+        m.select_label = m.name
+        result.append(m)
+        for c in sorted(m.children, key=lambda x: x.name):
+            c.select_label = f"{m.name} ← {c.name}"
+            result.append(c)
+    return result
 
 
 def log_action(action, target="", details=""):
@@ -385,7 +417,7 @@ def index():
         query = query.filter_by(priority=priority_filter)
 
     requirements = query.order_by(Requirement.created_at.desc()).all()
-    modules = Module.query.order_by(Module.name).all()
+    modules = modules_for_select()
     users = User.query.order_by(User.display_name).all()
     return render_template(
         "index.html",
@@ -542,7 +574,7 @@ def requirement_detail(req_id):
     req = db.session.get(Requirement, req_id)
     if not req:
         abort(404)
-    modules = Module.query.order_by(Module.name).all()
+    modules = modules_for_select()
     users = User.query.order_by(User.display_name).all()
     return render_template(
         "requirement.html",
@@ -612,6 +644,21 @@ def requirement_edit(req_id):
         req.implementer_name = imp.display_name if imp else ""
     else:
         req.implementer_name = ""
+    # מי מימש בפועל — רלוונטי כשהדרישה בסטטוס 'בוצע'.
+    # אם נסגרה בלי בחירה מפורשת, ברירת המחדל היא המוקצה לביצוע.
+    if req.status == "בוצע":
+        actual_id = request.form.get("actual_implementer_id", type=int) or None
+        if actual_id:
+            au = db.session.get(User, actual_id)
+            req.actual_implementer_id = actual_id
+            req.actual_implementer_name = au.display_name if au else ""
+        elif not req.actual_implementer_id and req.implementer_id:
+            req.actual_implementer_id = req.implementer_id
+            req.actual_implementer_name = req.implementer_name
+    else:
+        # דרישה שנפתחה מחדש — מנקים את המימוש בפועל
+        req.actual_implementer_id = None
+        req.actual_implementer_name = ""
     db.session.commit()
     # התראה לממש אם שויך ושונה מקודם
     me = current_user()
@@ -637,8 +684,29 @@ def requirement_delete(req_id):
         abort(404)
     parent_id = req.parent_id
     req_title = req.title
-    db.session.delete(req)
-    db.session.commit()
+
+    # איסוף הדרישה וכל צאצאיה (תתי-דרישות בכל עומק)
+    ids = []
+    stack = [req]
+    while stack:
+        node = stack.pop()
+        ids.append(node.id)
+        stack.extend(node.children)
+
+    # ניתוק רשומות שמפנות לדרישות (PostgreSQL אוכף מפתחות זרים):
+    # באגים מקושרים — נשארים, רק הקישור מתנתק; התראות על הדרישות — נמחקות.
+    try:
+        Bug.query.filter(Bug.requirement_id.in_(ids)).update(
+            {"requirement_id": None}, synchronize_session=False)
+        Notification.query.filter(Notification.requirement_id.in_(ids)).delete(
+            synchronize_session=False)
+        db.session.delete(req)  # תגובות וקבצים נמחקים בקסקדה
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash(f"המחיקה נכשלה: {e}", "error")
+        return redirect(url_for("requirement_detail", req_id=req_id))
+
     log_action("מחיקת דרישה", req_title)
     flash("הדרישה נמחקה", "ok")
     if parent_id:
@@ -965,8 +1033,14 @@ def bug_delete(bug_id):
     bug = db.session.get(Bug, bug_id)
     if bug:
         title = bug.title
-        db.session.delete(bug)
-        db.session.commit()
+        try:
+            Notification.query.filter_by(bug_id=bug.id).delete(synchronize_session=False)
+            db.session.delete(bug)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f"המחיקה נכשלה: {e}", "error")
+            return redirect(url_for("bug_detail", bug_id=bug_id))
         log_action("מחיקת באג", title)
         flash("הבאג נמחק", "ok")
     return redirect(url_for("bugs"))
@@ -1190,15 +1264,51 @@ def modules():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         color = request.form.get("color", "#6b7280")
+        parent_id = request.form.get("parent_id", type=int) or None
+        # תת-מודול יכול להיות רק תחת מודול ראשי (רמה אחת)
+        if parent_id:
+            parent = db.session.get(Module, parent_id)
+            if not parent or parent.parent_id:
+                parent_id = None
         if name and not Module.query.filter_by(name=name).first():
-            db.session.add(Module(name=name, color=color))
+            db.session.add(Module(name=name, color=color, parent_id=parent_id))
             db.session.commit()
-            log_action("הוספת מודול", name)
+            log_action("הוספת תת-מודול" if parent_id else "הוספת מודול", name)
             flash("המודול נוסף", "ok")
         else:
             flash("שם מודול ריק או קיים כבר", "error")
         return redirect(url_for("modules"))
-    return render_template("modules.html", modules=Module.query.order_by(Module.name).all())
+    top_modules = Module.query.filter_by(parent_id=None).order_by(Module.name).all()
+    links = ModuleLink.query.all()
+    return render_template(
+        "modules.html", modules=top_modules,
+        all_modules=modules_for_select(), links=links,
+    )
+
+
+@app.route("/modules/<int:mod_id>/edit", methods=["POST"])
+@login_required
+def module_edit(mod_id):
+    mod = db.session.get(Module, mod_id)
+    if not mod:
+        abort(404)
+    new_name = request.form.get("name", "").strip()
+    new_color = request.form.get("color", mod.color)
+    if not new_name:
+        flash("שם המודול לא יכול להיות ריק", "error")
+        return redirect(url_for("modules"))
+    exists = Module.query.filter(Module.name == new_name, Module.id != mod.id).first()
+    if exists:
+        flash("קיים כבר מודול בשם הזה", "error")
+        return redirect(url_for("modules"))
+    old_name = mod.name
+    mod.name = new_name
+    mod.color = new_color
+    db.session.commit()
+    # השיוכים נשמרים אוטומטית — הקישור הוא לפי מזהה, לא לפי שם
+    log_action("עריכת מודול", new_name, f"מ-{old_name}" if old_name != new_name else "")
+    flash("המודול עודכן. כל הדרישות המשויכות נשמרו.", "ok")
+    return redirect(url_for("modules"))
 
 
 @app.route("/modules/<int:mod_id>/delete", methods=["POST"])
@@ -1207,11 +1317,64 @@ def module_delete(mod_id):
     mod = db.session.get(Module, mod_id)
     if mod:
         mod_name = mod.name
-        db.session.delete(mod)
-        db.session.commit()
+        # תתי-המודולים הופכים לראשיים (לא נמחקים), והדרישות נשארות ללא שיוך
+        for child in mod.children:
+            child.parent_id = None
+        try:
+            ModuleLink.query.filter(
+                db.or_(ModuleLink.source_id == mod.id, ModuleLink.target_id == mod.id)
+            ).delete(synchronize_session=False)
+            db.session.delete(mod)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f"המחיקה נכשלה: {e}", "error")
+            return redirect(url_for("modules"))
         log_action("מחיקת מודול", mod_name)
         flash("המודול נמחק", "ok")
     return redirect(url_for("modules"))
+
+
+@app.route("/modules/link", methods=["POST"])
+@login_required
+def module_link_add():
+    source_id = request.form.get("source_id", type=int)
+    target_id = request.form.get("target_id", type=int)
+    label = request.form.get("label", "").strip()
+    if not source_id or not target_id or source_id == target_id:
+        flash("יש לבחור שני מודולים שונים", "error")
+        return redirect(url_for("modules"))
+    exists = ModuleLink.query.filter_by(source_id=source_id, target_id=target_id).first()
+    if exists:
+        flash("הקשר כבר קיים", "error")
+        return redirect(url_for("modules"))
+    src = db.session.get(Module, source_id)
+    tgt = db.session.get(Module, target_id)
+    db.session.add(ModuleLink(source_id=source_id, target_id=target_id, label=label))
+    db.session.commit()
+    log_action("הוספת קשר מודולים", f"{src.name} ← {tgt.name}")
+    flash("הקשר נוסף", "ok")
+    return redirect(url_for("modules"))
+
+
+@app.route("/modules/link/<int:link_id>/delete", methods=["POST"])
+@login_required
+def module_link_delete(link_id):
+    link = db.session.get(ModuleLink, link_id)
+    if link:
+        db.session.delete(link)
+        db.session.commit()
+        log_action("מחיקת קשר מודולים", f"{link.source.name} ← {link.target.name}")
+        flash("הקשר נמחק", "ok")
+    return redirect(url_for("modules"))
+
+
+@app.route("/modules/diagram")
+@login_required
+def modules_diagram():
+    all_modules = Module.query.order_by(Module.parent_id.isnot(None), Module.name).all()
+    links = ModuleLink.query.all()
+    return render_template("module_diagram.html", all_modules=all_modules, links=links)
 
 
 # ---------------------------------------------------------------------------
@@ -1363,6 +1526,9 @@ def ensure_schema():
         ("requirement", "implementer_name", "VARCHAR(120)"),
         ("bug", "priority", "VARCHAR(40)"),
         ("task", "priority", "VARCHAR(40)"),
+        ("module", "parent_id", "INTEGER"),
+        ("requirement", "actual_implementer_id", "INTEGER"),
+        ("requirement", "actual_implementer_name", "VARCHAR(120)"),
     ]
     for table, column, coltype in needed:
         try:

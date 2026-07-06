@@ -3,8 +3,58 @@
 {% block content %}
 <main>
   <div class="page-head">
-    <div><h1>מודולים</h1><p class="sub">קטגוריות לשיוך הדרישות</p></div>
+    <div><h1>מודולים</h1><p class="sub">קטגוריות לשיוך הדרישות · מודול יכול להכיל תתי-מודולים</p></div>
+    <a class="btn ghost sm" href="{{ url_for('modules_diagram') }}">🗺 תרשים מודולים</a>
   </div>
+
+  <!-- קשרים בין מודולים -->
+  <details class="add-box">
+    <summary>קשרים בין מודולים ({{ links|length }})</summary>
+    <div class="panel">
+      <form method="post" action="{{ url_for('module_link_add') }}">
+        <div class="grid2">
+          <div class="field">
+            <label>ממודול</label>
+            <select name="source_id" required>
+              <option value="">— בחר/י —</option>
+              {% for m in all_modules %}<option value="{{ m.id }}">{{ m.select_label or m.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>למודול</label>
+            <select name="target_id" required>
+              <option value="">— בחר/י —</option>
+              {% for m in all_modules %}<option value="{{ m.id }}">{{ m.select_label or m.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field" style="grid-column:1 / -1">
+            <label>תיאור הקשר (אופציונלי)</label>
+            <input type="text" name="label" placeholder="לדוגמה: שולח נתונים ל...">
+          </div>
+        </div>
+        <button class="btn" type="submit">הוספת קשר</button>
+      </form>
+      {% if links %}
+      <table style="margin-top:16px">
+        <thead><tr><th>ממודול</th><th>למודול</th><th>תיאור</th><th></th></tr></thead>
+        <tbody>
+          {% for l in links %}
+          <tr>
+            <td><span class="tag"><span class="swatch" style="background:{{ l.source.color }}"></span>{{ l.source.name }}</span></td>
+            <td><span class="tag"><span class="swatch" style="background:{{ l.target.color }}"></span>{{ l.target.name }}</span></td>
+            <td style="color:var(--ink-soft)">{{ l.label or '—' }}</td>
+            <td style="text-align:left">
+              <form class="inline-form" method="post" action="{{ url_for('module_link_delete', link_id=l.id) }}">
+                <button class="btn danger sm" type="submit">מחיקה</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+  </details>
 
   <details class="add-box">
     <summary>הוספת מודול</summary>
@@ -19,6 +69,13 @@
             <label>צבע תווית</label>
             <input type="color" name="color" value="#2f4a8a">
           </div>
+          <div class="field" style="grid-column:1 / -1">
+            <label>בתוך מודול (אופציונלי — לתת-מודול)</label>
+            <select name="parent_id">
+              <option value="">— מודול ראשי —</option>
+              {% for m in modules %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+            </select>
+          </div>
         </div>
         <button class="btn" type="submit">הוספה</button>
       </form>
@@ -26,23 +83,69 @@
   </details>
 
   {% if modules %}
-  <table>
-    <thead><tr><th>מודול</th><th>מספר דרישות</th><th></th></tr></thead>
-    <tbody>
-      {% for m in modules %}
-      <tr>
-        <td><span class="tag"><span class="swatch" style="background:{{ m.color }}"></span>{{ m.name }}</span></td>
-        <td>{{ m.requirements|length }}</td>
-        <td style="text-align:left">
+  <div class="req-list">
+    {% for m in modules %}
+    <div class="req-card">
+      <div class="row1">
+        <h3 style="display:flex;align-items:center;gap:9px">
+          <span class="swatch" style="width:14px;height:14px;border-radius:4px;background:{{ m.color }}"></span>
+          {{ m.name }}
+        </h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="tag">{{ m.requirements|length }} דרישות</span>
+          <details style="display:inline-block">
+            <summary class="btn ghost sm" style="list-style:none">עריכה</summary>
+            <div class="panel" style="margin-top:10px;min-width:260px;position:absolute;z-index:40">
+              <form method="post" action="{{ url_for('module_edit', mod_id=m.id) }}">
+                <div class="field"><label>שם</label><input type="text" name="name" value="{{ m.name }}" required></div>
+                <div class="field"><label>צבע</label><input type="color" name="color" value="{{ m.color }}"></div>
+                <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">שינוי השם לא מנתק דרישות משויכות — הכל נשמר.</p>
+                <button class="btn sm" type="submit">שמירה</button>
+              </form>
+            </div>
+          </details>
           <form class="inline-form" method="post" action="{{ url_for('module_delete', mod_id=m.id) }}"
-                onsubmit="return confirm('למחוק את המודול? הדרישות יישארו אך ללא שיוך.');">
+                onsubmit="return confirm('למחוק את המודול? הדרישות יישארו ללא שיוך, ותתי-המודולים יהפכו לראשיים.');">
             <button class="btn danger sm" type="submit">מחיקה</button>
           </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        </div>
+      </div>
+
+      <!-- תתי-מודולים -->
+      {% if m.children %}
+      <div class="subtree" style="margin-top:12px">
+        {% for c in m.children|sort(attribute='name') %}
+        <div class="sub-item">
+          <div class="row1">
+            <h4 style="display:flex;align-items:center;gap:8px">
+              <span class="swatch" style="width:11px;height:11px;border-radius:3px;background:{{ c.color }}"></span>
+              {{ c.name }}
+            </h4>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span class="tag">{{ c.requirements|length }} דרישות</span>
+              <details style="display:inline-block">
+                <summary class="btn ghost sm" style="list-style:none">עריכה</summary>
+                <div class="panel" style="margin-top:10px;min-width:260px;position:absolute;z-index:40">
+                  <form method="post" action="{{ url_for('module_edit', mod_id=c.id) }}">
+                    <div class="field"><label>שם</label><input type="text" name="name" value="{{ c.name }}" required></div>
+                    <div class="field"><label>צבע</label><input type="color" name="color" value="{{ c.color }}"></div>
+                    <button class="btn sm" type="submit">שמירה</button>
+                  </form>
+                </div>
+              </details>
+              <form class="inline-form" method="post" action="{{ url_for('module_delete', mod_id=c.id) }}"
+                    onsubmit="return confirm('למחוק את תת-המודול? הדרישות יישארו ללא שיוך.');">
+                <button class="btn danger sm" type="submit">מחיקה</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
   {% else %}
   <div class="empty">אין מודולים עדיין.</div>
   {% endif %}

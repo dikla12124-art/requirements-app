@@ -43,7 +43,7 @@
             <label>מודול</label>
             <select name="module_id">
               <option value="">— ללא מודול —</option>
-              {% for m in modules %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+              {% for m in modules %}<option value="{{ m.id }}">{{ m.select_label or m.name }}</option>{% endfor %}
             </select>
           </div>
           <div class="field">
@@ -54,7 +54,7 @@
             </select>
           </div>
           <div class="field">
-            <label>מי מימש</label>
+            <label>מוקצה לביצוע</label>
             <select name="implementer_id">
               <option value="">— לא צוין —</option>
               {% for u in users %}<option value="{{ u.id }}">{{ u.display_name }}</option>{% endfor %}
@@ -90,12 +90,12 @@
       {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if proposer_filter==u.id }}>הציע: {{ u.display_name }}</option>{% endfor %}
     </select>
     <select name="implementer">
-      <option value="">כל המממשים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if implementer_filter==u.id }}>מימש: {{ u.display_name }}</option>{% endfor %}
+      <option value="">כל המוקצים</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if implementer_filter==u.id }}>מוקצה: {{ u.display_name }}</option>{% endfor %}
     </select>
     <select name="module">
       <option value="">כל המודולים</option>
-      {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if module_filter==m.id }}>{{ m.name }}</option>{% endfor %}
+      {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if module_filter==m.id }}>{{ m.select_label or m.name }}</option>{% endfor %}
     </select>
     <select name="priority">
       <option value="">כל העדיפויות</option>
@@ -120,7 +120,7 @@
       <div class="req-meta">
         {% if r.module %}<span class="tag"><span class="swatch" style="background:{{ r.module.color }}"></span>{{ r.module.name }}</span>{% endif %}
         {% if r.proposer %}<span class="tag proposer">הציע/ה: {{ r.proposer.display_name }}</span>{% endif %}
-        {% if r.implementer_name %}<span class="tag proposer">מימש/ה: {{ r.implementer_name }}</span>{% endif %}
+        {% if r.implementer_name %}<span class="tag proposer">מוקצה לביצוע: {{ r.implementer_name }}</span>{% endif %}
         {% if r.children %}<span class="tag children">{{ r.children|length }} תתי-דרישות</span>{% endif %}
         <span class="prio {{ r.priority }}">עדיפות: {{ r.priority }}</span>
       </div>
