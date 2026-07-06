@@ -122,6 +122,31 @@
     Array.prototype.forEach.call(document.querySelectorAll('textarea[data-mention]'), attach);
   });
 })();
+
+// שורת חיפוש מאוחדת: בורר 'לפי מה' + שדה השלמה שמתחלף
+(function () {
+  document.addEventListener('DOMContentLoaded', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.search-bar'), function (bar) {
+      var field = bar.querySelector('.search-field');
+      var vals = bar.querySelectorAll('.search-val');
+      if (!field) return;
+      function update() {
+        Array.prototype.forEach.call(vals, function (v) {
+          var on = v.getAttribute('data-for') === field.value;
+          v.style.display = on ? '' : 'none';
+          v.disabled = !on;
+        });
+      }
+      field.addEventListener('change', function () {
+        Array.prototype.forEach.call(vals, function (v) {
+          if (v.getAttribute('data-for') !== field.value) v.value = '';
+        });
+        update();
+      });
+      update();
+    });
+  });
+})();
 </script>
 </body>
 </html>

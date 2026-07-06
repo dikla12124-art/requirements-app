@@ -230,3 +230,32 @@ select[multiple] { padding: 4px; }
 .mention-box .mi:last-child { border-bottom: none; }
 .mention-box .mi:hover, .mention-box .mi.active { background: var(--brand-soft); color: var(--brand); }
 .mention-box .mi .u { font-size: 12px; color: var(--ink-soft); }
+
+/* ---------- Unified search bar ---------- */
+.search-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px 16px; margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+.search-bar .search-label { font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 7px; }
+.search-bar .search-label::before { content: "🔍"; font-size: 15px; }
+.search-bar select, .search-bar input { width: auto; min-width: 150px; }
+.search-bar .search-field { font-weight: 600; }
+
+/* ---------- Attachments ---------- */
+.attach-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.attach-item {
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  width: 140px; background: var(--surface);
+}
+.attach-item img { width: 100%; height: 100px; object-fit: cover; display: block; }
+.attach-item .file-ic {
+  height: 100px; display: flex; align-items: center; justify-content: center;
+  font-size: 38px; background: var(--bg); color: var(--ink-soft);
+}
+.attach-item .att-meta { padding: 8px 10px; }
+.attach-item .att-name { font-size: 12.5px; word-break: break-word; display: block; margin-bottom: 5px; }
+.attach-item .att-actions { display: flex; justify-content: space-between; align-items: center; }
+.attach-item .att-actions a { font-size: 12px; }
+.attach-item .att-actions button { background: none; border: none; color: var(--err); cursor: pointer; font-size: 12px; padding: 0; font-family: inherit; }

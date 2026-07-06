@@ -38,6 +38,26 @@
     </div>
   </details>
 
+  <!-- חיפוש -->
+  {% set active = 'phone' if phone_q else ('role' if role_q else 'name') %}
+  <form class="search-bar" method="get">
+    <span class="search-label">חיפוש:</span>
+    <select name="field" class="search-field">
+      <option value="name" {{ 'selected' if active=='name' }}>לפי שם</option>
+      <option value="phone" {{ 'selected' if active=='phone' }}>לפי טלפון</option>
+      <option value="role" {{ 'selected' if active=='role' }}>לפי תפקיד</option>
+    </select>
+    <input type="text" name="name" class="search-val" data-for="name" value="{{ name_q }}" placeholder="הקלד/י שם">
+    <input type="text" name="phone" class="search-val" data-for="phone" value="{{ phone_q }}" placeholder="הקלד/י טלפון">
+    <select name="role" class="search-val" data-for="role">
+      <option value="">— בחר/י תפקיד —</option>
+      <option value="admin" {{ 'selected' if role_q=='admin' }}>אדמין</option>
+      <option value="user" {{ 'selected' if role_q=='user' }}>משתמש</option>
+    </select>
+    <button class="btn sm" type="submit">חיפוש</button>
+    {% if name_q or phone_q or role_q %}<a class="btn ghost sm" href="{{ url_for('admin') }}">ניקוי</a>{% endif %}
+  </form>
+
   <table>
     <thead><tr><th>שם</th><th>שם משתמש</th><th>טלפון</th><th>תפקיד</th><th>נוצר</th><th></th></tr></thead>
     <tbody>

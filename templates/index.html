@@ -62,25 +62,34 @@
     </div>
   </details>
 
-  <!-- סינון -->
-  <form class="filters" method="get">
-    <select name="module" onchange="this.form.submit()">
-      <option value="">כל המודולים</option>
-      {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if module_filter==m.id }}>{{ m.name }}</option>{% endfor %}
+  <!-- חיפוש -->
+  {% set active = 'module' if module_filter else ('proposer' if proposer_filter else ('implementer' if implementer_filter else 'status')) %}
+  <form class="search-bar" method="get">
+    <span class="search-label">חיפוש:</span>
+    <select name="field" class="search-field">
+      <option value="status" {{ 'selected' if active=='status' }}>לפי סטטוס</option>
+      <option value="module" {{ 'selected' if active=='module' }}>לפי מודול</option>
+      <option value="proposer" {{ 'selected' if active=='proposer' }}>לפי מי הציע</option>
+      <option value="implementer" {{ 'selected' if active=='implementer' }}>לפי מי מימש</option>
     </select>
-    <select name="status" onchange="this.form.submit()">
-      <option value="">כל הסטטוסים</option>
+    <select name="status" class="search-val" data-for="status">
+      <option value="">— בחר/י סטטוס —</option>
       {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
     </select>
-    <select name="proposer" onchange="this.form.submit()">
-      <option value="">כל המציעים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if proposer_filter==u.id }}>הציע: {{ u.display_name }}</option>{% endfor %}
+    <select name="module" class="search-val" data-for="module">
+      <option value="">— בחר/י מודול —</option>
+      {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if module_filter==m.id }}>{{ m.name }}</option>{% endfor %}
     </select>
-    <select name="implementer" onchange="this.form.submit()">
-      <option value="">כל המממשים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if implementer_filter==u.id }}>מימש: {{ u.display_name }}</option>{% endfor %}
+    <select name="proposer" class="search-val" data-for="proposer">
+      <option value="">— בחר/י מציע —</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if proposer_filter==u.id }}>{{ u.display_name }}</option>{% endfor %}
     </select>
-    {% if module_filter or status_filter or proposer_filter or implementer_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי סינון</a>{% endif %}
+    <select name="implementer" class="search-val" data-for="implementer">
+      <option value="">— בחר/י מממש —</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if implementer_filter==u.id }}>{{ u.display_name }}</option>{% endfor %}
+    </select>
+    <button class="btn sm" type="submit">חיפוש</button>
+    {% if module_filter or status_filter or proposer_filter or implementer_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי</a>{% endif %}
   </form>
 
   <!-- רשימה -->

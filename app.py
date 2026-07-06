@@ -9,12 +9,13 @@
 """
 
 import os
+import io
 from datetime import datetime, date
 from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, abort
+    session, flash, abort, send_file
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -32,15 +33,16 @@ if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024  # מגבלת העלאה: 15MB לקובץ
 
 db = SQLAlchemy(app)
 
 # מצבי דרישה ועדיפויות (ניתן להרחיב)
-STATUSES = ["הצעה", "בבדיקה", "אושרה", "בפיתוח", "הושלמה", "נדחתה"]
+STATUSES = ["הצעה", "בפיתוח", "הושלמה"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.4 · מי מימש, חיפוש ותיוג @"
+APP_VERSION = "גרסה 3.5 · חיפוש מאוחד וקבצים"
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +189,30 @@ class Task(db.Model):
 
 
 TASK_STATUSES = ["לביצוע", "בתהליך", "הושלם"]
+
+
+class Attachment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    requirement_id = db.Column(db.Integer, db.ForeignKey("requirement.id"), nullable=True)
+    bug_id = db.Column(db.Integer, db.ForeignKey("bug.id"), nullable=True)
+    filename = db.Column(db.String(300), default="")
+    mimetype = db.Column(db.String(120), default="")
+    data = db.Column(db.LargeBinary, nullable=False)   # תוכן הקובץ נשמר ב-DB
+    uploaded_by = db.Column(db.String(120), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    requirement = db.relationship(
+        "Requirement",
+        backref=db.backref("attachments", cascade="all, delete-orphan"),
+    )
+    bug = db.relationship(
+        "Bug",
+        backref=db.backref("attachments", cascade="all, delete-orphan"),
+    )
+
+    @property
+    def is_image(self):
+        return (self.mimetype or "").startswith("image/")
 
 
 def send_whatsapp(phone, message):
@@ -711,6 +737,89 @@ def bug_delete(bug_id):
 
 
 # ---------------------------------------------------------------------------
+# קבצים מצורפים (נשמרים במסד הנתונים)
+# ---------------------------------------------------------------------------
+def _save_upload(file_storage, requirement_id=None, bug_id=None):
+    if not file_storage or not file_storage.filename:
+        return False
+    data = file_storage.read()
+    if not data:
+        return False
+    att = Attachment(
+        requirement_id=requirement_id,
+        bug_id=bug_id,
+        filename=file_storage.filename,
+        mimetype=file_storage.mimetype or "application/octet-stream",
+        data=data,
+        uploaded_by=current_user().display_name,
+    )
+    db.session.add(att)
+    db.session.commit()
+    return True
+
+
+@app.route("/requirement/<int:req_id>/attach", methods=["POST"])
+@login_required
+def requirement_attach(req_id):
+    req = db.session.get(Requirement, req_id)
+    if not req:
+        abort(404)
+    if _save_upload(request.files.get("file"), requirement_id=req.id):
+        log_action("צירוף קובץ לדרישה", req.title)
+        flash("הקובץ צורף", "ok")
+    else:
+        flash("לא נבחר קובץ", "error")
+    return redirect(url_for("requirement_detail", req_id=req_id) + "#files")
+
+
+@app.route("/bug/<int:bug_id>/attach", methods=["POST"])
+@login_required
+def bug_attach(bug_id):
+    bug = db.session.get(Bug, bug_id)
+    if not bug:
+        abort(404)
+    if _save_upload(request.files.get("file"), bug_id=bug.id):
+        log_action("צירוף קובץ לבאג", bug.title)
+        flash("הקובץ צורף", "ok")
+    else:
+        flash("לא נבחר קובץ", "error")
+    return redirect(url_for("bug_detail", bug_id=bug_id) + "#files")
+
+
+@app.route("/attachment/<int:att_id>")
+@login_required
+def attachment_view(att_id):
+    att = db.session.get(Attachment, att_id)
+    if not att:
+        abort(404)
+    # תמונות מוצגות בדפדפן, שאר הקבצים יורדים
+    as_download = not att.is_image
+    return send_file(
+        io.BytesIO(att.data),
+        mimetype=att.mimetype or "application/octet-stream",
+        as_attachment=as_download,
+        download_name=att.filename or f"attachment-{att.id}",
+    )
+
+
+@app.route("/attachment/<int:att_id>/delete", methods=["POST"])
+@login_required
+def attachment_delete(att_id):
+    att = db.session.get(Attachment, att_id)
+    if att:
+        req_id, bug_id = att.requirement_id, att.bug_id
+        db.session.delete(att)
+        db.session.commit()
+        log_action("מחיקת קובץ מצורף", att.filename)
+        flash("הקובץ נמחק", "ok")
+        if bug_id:
+            return redirect(url_for("bug_detail", bug_id=bug_id) + "#files")
+        if req_id:
+            return redirect(url_for("requirement_detail", req_id=req_id) + "#files")
+    return redirect(url_for("index"))
+
+
+# ---------------------------------------------------------------------------
 # ניהול משימות
 # ---------------------------------------------------------------------------
 def _parse_date(value):
@@ -868,8 +977,23 @@ def module_delete(mod_id):
 @app.route("/admin")
 @admin_required
 def admin():
-    users = User.query.order_by(User.created_at).all()
-    return render_template("admin.html", users=users)
+    name_q = request.args.get("name", "").strip()
+    phone_q = request.args.get("phone", "").strip()
+    role_q = request.args.get("role", "")
+    query = User.query
+    if name_q:
+        query = query.filter(User.display_name.ilike(f"%{name_q}%"))
+    if phone_q:
+        query = query.filter(User.phone.ilike(f"%{phone_q}%"))
+    if role_q == "admin":
+        query = query.filter_by(is_admin=True)
+    elif role_q == "user":
+        query = query.filter_by(is_admin=False)
+    users = query.order_by(User.created_at).all()
+    return render_template(
+        "admin.html", users=users,
+        name_q=name_q, phone_q=phone_q, role_q=role_q,
+    )
 
 
 @app.route("/admin/user/add", methods=["POST"])
@@ -1007,10 +1131,29 @@ def ensure_schema():
                 print(f"[migrate] דילוג על {table}.{column}: {e}")
 
 
+def migrate_statuses():
+    """
+    המרת סטטוסים ישנים של דרישות: כל סטטוס שאינו 'הושלמה' או 'בפיתוח'
+    (למשל 'בבדיקה', 'אושרה', 'נדחתה') הופך ל'הצעה'. שומר על הנתונים —
+    רק מעדכן ערך סטטוס, לא מוחק שום דרישה. פעולה אידמפוטנטית.
+    """
+    try:
+        changed = Requirement.query.filter(
+            ~Requirement.status.in_(STATUSES)
+        ).update({"status": "הצעה"}, synchronize_session=False)
+        if changed:
+            db.session.commit()
+            print(f"[migrate] {changed} דרישות עם סטטוס ישן הומרו ל'הצעה'")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[migrate] דילוג על המרת סטטוסים: {e}")
+
+
 def init_db():
     with app.app_context():
         db.create_all()
         ensure_schema()
+        migrate_statuses()
         if not User.query.first():
             admin_username = os.environ.get("ADMIN_USERNAME", "dikla")
             admin_password = os.environ.get("ADMIN_PASSWORD", "changeme123")
