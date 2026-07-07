@@ -118,6 +118,7 @@
       </div>
       {% if r.description %}<p class="desc">{{ r.description }}</p>{% endif %}
       <div class="req-meta">
+        {% if r.parent %}<a class="tag children" href="{{ url_for('requirement_detail', req_id=r.parent.id) }}">↳ תת-דרישה של: {{ r.parent.title }}</a>{% endif %}
         {% if r.module %}<span class="tag"><span class="swatch" style="background:{{ r.module.color }}"></span>{{ r.module.name }}</span>{% endif %}
         {% if r.proposer %}<span class="tag proposer">הציע/ה: {{ r.proposer.display_name }}</span>{% endif %}
         {% if r.implementer_name %}<span class="tag proposer">מוקצה לביצוע: {{ r.implementer_name }}</span>{% endif %}

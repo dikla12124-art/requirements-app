@@ -31,6 +31,26 @@
     </div>
     <div style="display:flex;gap:8px">
       <button type="button" class="btn ghost sm" onclick="toggleEdit()">עריכה</button>
+      <details style="display:inline-block">
+        <summary class="btn ghost sm" style="list-style:none">העברה</summary>
+        <div class="panel" style="margin-top:10px;min-width:290px;position:absolute;z-index:40;left:0">
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">
+            {% if req.parent %}הדרישה היא כרגע תת-דרישה של "{{ req.parent.title }}".{% else %}הדרישה היא כרגע דרישה ראשית.{% endif %}
+          </p>
+          <form method="post" action="{{ url_for('requirement_move', req_id=req.id) }}">
+            <div class="field">
+              <label>העברה אל</label>
+              <select name="new_parent_id">
+                <option value="">— דרישה ראשית (ללא אם) —</option>
+                {% for t in move_targets %}
+                <option value="{{ t.id }}" {{ 'selected' if req.parent_id==t.id }}>תת-דרישה של: {{ t.title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button class="btn sm" type="submit">העברה</button>
+          </form>
+        </div>
+      </details>
       <form class="inline-form" method="post" action="{{ url_for('requirement_delete', req_id=req.id) }}"
             onsubmit="return confirm('למחוק את הדרישה{% if req.children %} ואת כל תתי-הדרישות שלה{% endif %}?');">
         <button class="btn danger sm" type="submit">מחיקה</button>

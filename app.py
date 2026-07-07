@@ -42,7 +42,7 @@ STATUSES = ["חדש", "בתהליך", "בוצע"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.13 · תרשים מודולים ומימוש בפועל"
+APP_VERSION = "גרסה 3.14 · תתי-דרישות בחיפוש והעברה"
 
 
 # ---------------------------------------------------------------------------
@@ -404,7 +404,10 @@ def index():
     implementer_filter = request.args.get("implementer", type=int)
     priority_filter = request.args.get("priority", "")
 
-    query = Requirement.query.filter_by(parent_id=None)
+    has_filter = any([module_filter, status_filter, proposer_filter,
+                      implementer_filter, priority_filter])
+    # ללא חיפוש: רק דרישות ראשיות. עם חיפוש: גם תתי-דרישות תואמות.
+    query = Requirement.query if has_filter else Requirement.query.filter_by(parent_id=None)
     if module_filter:
         query = query.filter_by(module_id=module_filter)
     if status_filter:
@@ -576,6 +579,15 @@ def requirement_detail(req_id):
         abort(404)
     modules = modules_for_select()
     users = User.query.order_by(User.display_name).all()
+    # יעדים אפשריים להעברה: כל הדרישות פרט לדרישה עצמה ולצאצאיה
+    exclude = set()
+    stack = [req]
+    while stack:
+        node = stack.pop()
+        exclude.add(node.id)
+        stack.extend(node.children)
+    move_targets = [r for r in Requirement.query.order_by(Requirement.title).all()
+                    if r.id not in exclude]
     return render_template(
         "requirement.html",
         req=req,
@@ -583,6 +595,7 @@ def requirement_detail(req_id):
         users=users,
         statuses=STATUSES,
         priorities=PRIORITIES,
+        move_targets=move_targets,
     )
 
 
@@ -674,6 +687,39 @@ def requirement_edit(req_id):
     log_action("עריכת דרישה", req.title, f"סטטוס: {req.status}")
     flash("הדרישה עודכנה", "ok")
     return redirect(request.referrer or url_for("requirement_detail", req_id=req_id))
+
+
+@app.route("/requirement/<int:req_id>/move", methods=["POST"])
+@login_required
+def requirement_move(req_id):
+    req = db.session.get(Requirement, req_id)
+    if not req:
+        abort(404)
+    new_parent_id = request.form.get("new_parent_id", type=int) or None
+
+    if new_parent_id:
+        if new_parent_id == req.id:
+            flash("לא ניתן להעביר דרישה תחת עצמה", "error")
+            return redirect(url_for("requirement_detail", req_id=req_id))
+        new_parent = db.session.get(Requirement, new_parent_id)
+        if not new_parent:
+            flash("דרישת היעד לא נמצאה", "error")
+            return redirect(url_for("requirement_detail", req_id=req_id))
+        # הגנה ממעגל: היעד לא יכול להיות צאצא של הדרישה המועברת
+        node = new_parent
+        while node:
+            if node.id == req.id:
+                flash("לא ניתן להעביר דרישה תחת תת-דרישה שלה", "error")
+                return redirect(url_for("requirement_detail", req_id=req_id))
+            node = node.parent
+
+    old_parent = req.parent.title if req.parent else "ראשית"
+    req.parent_id = new_parent_id
+    db.session.commit()
+    new_parent_title = req.parent.title if req.parent else "ראשית"
+    log_action("העברת דרישה", req.title, f"מ-{old_parent} ל-{new_parent_title}")
+    flash("הדרישה הועברה בהצלחה", "ok")
+    return redirect(url_for("requirement_detail", req_id=req_id))
 
 
 @app.route("/requirement/<int:req_id>/delete", methods=["POST"])
