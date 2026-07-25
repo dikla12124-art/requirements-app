@@ -48,26 +48,33 @@
     </div>
   </details>
 
-  <!-- חיפוש: הקוביות פועלות יחד -->
+  <!-- חיפוש: בחירה מרובה, הקוביות פועלות יחד -->
   <form class="search-bar" method="get">
     <span class="search-label">חיפוש:</span>
-    <select name="status">
-      <option value="">כל הסטטוסים</option>
-      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
-    </select>
-    <select name="assignee">
-      <option value="">כל האחראים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_filter==u.id }}>אחראי: {{ u.display_name }}</option>{% endfor %}
-    </select>
-    <select name="priority">
-      <option value="">כל העדיפויות</option>
-      {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if priority_filter==p }}>{{ p }}</option>{% endfor %}
-    </select>
+    <details class="ms">
+      <summary>סטטוס{% if status_filters %} ({{ status_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for s in statuses %}<label><input type="checkbox" name="status" value="{{ s }}" {{ 'checked' if s in status_filters }}> {{ s }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>אחראי{% if assignee_filters %} ({{ assignee_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for u in users %}<label><input type="checkbox" name="assignee" value="{{ u.id }}" {{ 'checked' if u.id in assignee_filters }}> {{ u.display_name }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>עדיפות{% if priority_filters %} ({{ priority_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for p in priorities %}<label><input type="checkbox" name="priority" value="{{ p }}" {{ 'checked' if p in priority_filters }}> {{ p }}</label>{% endfor %}
+      </div>
+    </details>
     <button class="btn sm" type="submit">חיפוש</button>
-    {% if status_filter or assignee_filter or priority_filter %}<a class="btn ghost sm" href="{{ url_for('tasks') }}">ניקוי</a>{% endif %}
+    {% set any_filter = status_filters or assignee_filters or priority_filters %}
+    {% if any_filter %}<a class="btn ghost sm" href="{{ url_for('tasks') }}">ניקוי</a>{% endif %}
   </form>
 
-  <p class="results-count">נמצאו {{ tasks|length }} תוצאות{{ ' (מסונן)' if status_filter or assignee_filter or priority_filter }}</p>
+  <p class="results-count">נמצאו {{ tasks|length }} תוצאות{{ ' (מסונן)' if any_filter }}</p>
 
   <!-- רשימה -->
   {% if tasks %}

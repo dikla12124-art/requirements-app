@@ -43,16 +43,18 @@
     <span class="search-label">חיפוש:</span>
     <input type="text" name="name" value="{{ name_q }}" placeholder="שם">
     <input type="text" name="phone" value="{{ phone_q }}" placeholder="טלפון">
-    <select name="role">
-      <option value="">כל התפקידים</option>
-      <option value="admin" {{ 'selected' if role_q=='admin' }}>אדמין</option>
-      <option value="user" {{ 'selected' if role_q=='user' }}>משתמש</option>
-    </select>
+    <details class="ms">
+      <summary>תפקיד{% if role_filters %} ({{ role_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        <label><input type="checkbox" name="role" value="admin" {{ 'checked' if 'admin' in role_filters }}> אדמין</label>
+        <label><input type="checkbox" name="role" value="user" {{ 'checked' if 'user' in role_filters }}> משתמש</label>
+      </div>
+    </details>
     <button class="btn sm" type="submit">חיפוש</button>
-    {% if name_q or phone_q or role_q %}<a class="btn ghost sm" href="{{ url_for('admin') }}">ניקוי</a>{% endif %}
+    {% if name_q or phone_q or role_filters %}<a class="btn ghost sm" href="{{ url_for('admin') }}">ניקוי</a>{% endif %}
   </form>
 
-  <p class="results-count">נמצאו {{ users|length }} תוצאות{{ ' (מסונן)' if name_q or phone_q or role_q }}</p>
+  <p class="results-count">נמצאו {{ users|length }} תוצאות{{ ' (מסונן)' if name_q or phone_q or role_filters }}</p>
 
   <table>
     <thead><tr><th>שם</th><th>שם משתמש</th><th>טלפון</th><th>תפקיד</th><th>נוצר</th><th></th></tr></thead>

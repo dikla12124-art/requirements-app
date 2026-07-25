@@ -284,3 +284,14 @@ select[multiple] { padding: 4px; }
 /* ---------- Collapsed list cards ---------- */
 .card-body { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 .req-card .row1 { margin-bottom: 0; }
+
+/* ---------- Multi-select dropdown ---------- */
+.ms { position: relative; display: inline-block; }
+.ms > summary { list-style: none; cursor: pointer; border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 14px; background: var(--surface); font-size: 14.5px; min-width: 120px; user-select: none; }
+.ms > summary::-webkit-details-marker { display: none; }
+.ms > summary::after { content: " ▾"; color: var(--ink-soft); font-size: 12px; }
+.ms[open] > summary { border-color: var(--brand); }
+.ms-menu { position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 70; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 8px; min-width: 190px; max-height: 230px; overflow-y: auto; }
+.ms-menu label { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 14px; white-space: nowrap; }
+.ms-menu label:hover { background: var(--brand-soft); }
+.ms-menu input[type=checkbox] { width: auto; }

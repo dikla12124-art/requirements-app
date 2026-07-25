@@ -77,34 +77,45 @@
     </div>
   </details>
 
-  <!-- חיפוש: כל הקוביות פועלות יחד (AND) -->
+  <!-- חיפוש: בחירה מרובה בכל קוביה, הקוביות פועלות יחד (AND) -->
   <form class="search-bar" method="get">
     <span class="search-label">חיפוש:</span>
-    <select name="status">
-      <option value="">כל הסטטוסים</option>
-      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filter==s }}>{{ s }}</option>{% endfor %}
-    </select>
-    <select name="proposer">
-      <option value="">כל המציעים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if proposer_filter==u.id }}>הציע: {{ u.display_name }}</option>{% endfor %}
-    </select>
-    <select name="implementer">
-      <option value="">כל המוקצים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if implementer_filter==u.id }}>מוקצה: {{ u.display_name }}</option>{% endfor %}
-    </select>
-    <select name="module">
-      <option value="">כל המודולים</option>
-      {% for m in modules %}<option value="{{ m.id }}" {{ 'selected' if module_filter==m.id }}>{{ m.select_label or m.name }}</option>{% endfor %}
-    </select>
-    <select name="priority">
-      <option value="">כל העדיפויות</option>
-      {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if priority_filter==p }}>{{ p }}</option>{% endfor %}
-    </select>
+    <details class="ms">
+      <summary>סטטוס{% if status_filters %} ({{ status_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for s in statuses %}<label><input type="checkbox" name="status" value="{{ s }}" {{ 'checked' if s in status_filters }}> {{ s }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>מי הציע{% if proposer_filters %} ({{ proposer_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for u in users %}<label><input type="checkbox" name="proposer" value="{{ u.id }}" {{ 'checked' if u.id in proposer_filters }}> {{ u.display_name }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>מוקצה לביצוע{% if implementer_filters %} ({{ implementer_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for u in users %}<label><input type="checkbox" name="implementer" value="{{ u.id }}" {{ 'checked' if u.id in implementer_filters }}> {{ u.display_name }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>מודול{% if module_filters %} ({{ module_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for m in modules %}<label><input type="checkbox" name="module" value="{{ m.id }}" {{ 'checked' if m.id in module_filters }}> {{ m.select_label or m.name }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>עדיפות{% if priority_filters %} ({{ priority_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for p in priorities %}<label><input type="checkbox" name="priority" value="{{ p }}" {{ 'checked' if p in priority_filters }}> {{ p }}</label>{% endfor %}
+      </div>
+    </details>
     <button class="btn sm" type="submit">חיפוש</button>
-    {% if module_filter or status_filter or proposer_filter or implementer_filter or priority_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי</a>{% endif %}
+    {% set any_filter = module_filters or status_filters or proposer_filters or implementer_filters or priority_filters %}
+    {% if any_filter %}<a class="btn ghost sm" href="{{ url_for('index') }}">ניקוי</a>{% endif %}
   </form>
 
-  <p class="results-count">נמצאו {{ requirements|length }} תוצאות{{ ' (מסונן)' if module_filter or status_filter or proposer_filter or implementer_filter or priority_filter }}</p>
+  <p class="results-count">נמצאו {{ requirements|length }} תוצאות{{ ' (מסונן)' if any_filter }}</p>
 
   <!-- רשימה -->
   {% if requirements %}

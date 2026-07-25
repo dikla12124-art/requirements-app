@@ -42,7 +42,7 @@ STATUSES = ["חדש", "בתהליך", "בוצע"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.16 · תצוגה קומפקטית"
+APP_VERSION = "גרסה 3.17 · בחירה מרובה בחיפוש"
 
 
 # ---------------------------------------------------------------------------
@@ -396,23 +396,23 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    module_filter = request.args.get("module", type=int)
-    status_filter = request.args.get("status", "")
-    proposer_filter = request.args.get("proposer", type=int)
-    implementer_filter = request.args.get("implementer", type=int)
-    priority_filter = request.args.get("priority", "")
+    module_filters = [int(x) for x in request.args.getlist("module") if x.isdigit()]
+    status_filters = [x for x in request.args.getlist("status") if x]
+    proposer_filters = [int(x) for x in request.args.getlist("proposer") if x.isdigit()]
+    implementer_filters = [int(x) for x in request.args.getlist("implementer") if x.isdigit()]
+    priority_filters = [x for x in request.args.getlist("priority") if x]
 
     query = Requirement.query
-    if module_filter:
-        query = query.filter_by(module_id=module_filter)
-    if status_filter:
-        query = query.filter_by(status=status_filter)
-    if proposer_filter:
-        query = query.filter_by(proposer_id=proposer_filter)
-    if implementer_filter:
-        query = query.filter_by(implementer_id=implementer_filter)
-    if priority_filter:
-        query = query.filter_by(priority=priority_filter)
+    if module_filters:
+        query = query.filter(Requirement.module_id.in_(module_filters))
+    if status_filters:
+        query = query.filter(Requirement.status.in_(status_filters))
+    if proposer_filters:
+        query = query.filter(Requirement.proposer_id.in_(proposer_filters))
+    if implementer_filters:
+        query = query.filter(Requirement.implementer_id.in_(implementer_filters))
+    if priority_filters:
+        query = query.filter(Requirement.priority.in_(priority_filters))
 
     requirements = query.order_by(Requirement.created_at.desc()).all()
     modules = modules_for_select()
@@ -424,11 +424,11 @@ def index():
         users=users,
         statuses=STATUSES,
         priorities=PRIORITIES,
-        module_filter=module_filter,
-        status_filter=status_filter,
-        proposer_filter=proposer_filter,
-        implementer_filter=implementer_filter,
-        priority_filter=priority_filter,
+        module_filters=module_filters,
+        status_filters=status_filters,
+        proposer_filters=proposer_filters,
+        implementer_filters=implementer_filters,
+        priority_filters=priority_filters,
     )
 
 
@@ -736,77 +736,78 @@ def notifications():
 @login_required
 def search():
     q = request.args.get("q", "").strip()
-    type_f = request.args.get("type", "")       # '' / requirement / task / bug
-    status_f = request.args.get("status", "")
-    priority_f = request.args.get("priority", "")
-    assignee_f = request.args.get("assignee", type=int)
+    type_filters = [x for x in request.args.getlist("type") if x]
+    status_filters = [x for x in request.args.getlist("status") if x]
+    priority_filters = [x for x in request.args.getlist("priority") if x]
+    assignee_filters = [int(x) for x in request.args.getlist("assignee") if x.isdigit()]
     # דף הבית: כניסה ללא פרמטרים מציגה את הפריטים של המשתמש המחובר
     my_default = False
     if not request.args:
-        assignee_f = current_user().id
+        assignee_filters = [current_user().id]
         my_default = True
     results = []
     like = f"%{q}%"
 
-    if type_f in ("", "requirement"):
+    if not type_filters or "requirement" in type_filters:
         qr = Requirement.query
         if q:
             qr = qr.filter(db.or_(Requirement.title.ilike(like), Requirement.description.ilike(like)))
-        if status_f:
-            qr = qr.filter_by(status=status_f)
-        if priority_f:
-            qr = qr.filter_by(priority=priority_f)
-        if assignee_f:
-            qr = qr.filter_by(implementer_id=assignee_f)
+        if status_filters:
+            qr = qr.filter(Requirement.status.in_(status_filters))
+        if priority_filters:
+            qr = qr.filter(Requirement.priority.in_(priority_filters))
+        if assignee_filters:
+            qr = qr.filter(Requirement.implementer_id.in_(assignee_filters))
         for r in qr.all():
             results.append({
-                "type": "דרישה", "title": r.title, "description": r.description,
+                "type": "דרישה", "kind": "requirement", "title": r.title, "description": r.description,
                 "status": r.status, "priority": r.priority,
                 "who": r.implementer_name or "", "url": url_for("requirement_detail", req_id=r.id),
             })
 
-    if type_f in ("", "task"):
+    if not type_filters or "task" in type_filters:
         qt = Task.query
         if q:
             qt = qt.filter(db.or_(Task.title.ilike(like), Task.description.ilike(like)))
-        if status_f:
-            qt = qt.filter_by(status=status_f)
-        if priority_f:
-            qt = qt.filter_by(priority=priority_f)
-        if assignee_f:
-            qt = qt.filter_by(assignee_id=assignee_f)
+        if status_filters:
+            qt = qt.filter(Task.status.in_(status_filters))
+        if priority_filters:
+            qt = qt.filter(Task.priority.in_(priority_filters))
+        if assignee_filters:
+            qt = qt.filter(Task.assignee_id.in_(assignee_filters))
         for t in qt.all():
             results.append({
-                "type": "משימה", "title": t.title, "description": t.description,
+                "type": "משימה", "kind": "task", "title": t.title, "description": t.description,
                 "status": t.status, "priority": t.priority,
                 "who": t.assignee_name or "", "url": url_for("tasks"),
             })
 
-    if type_f in ("", "bug"):
+    if not type_filters or "bug" in type_filters:
         qb = Bug.query
         if q:
             qb = qb.filter(db.or_(Bug.title.ilike(like), Bug.description.ilike(like)))
-        if status_f:
-            qb = qb.filter_by(status=status_f)
-        if priority_f:
-            qb = qb.filter_by(priority=priority_f)
-        if assignee_f:
-            qb = qb.filter_by(assignee_id=assignee_f)
+        if status_filters:
+            qb = qb.filter(Bug.status.in_(status_filters))
+        if priority_filters:
+            qb = qb.filter(Bug.priority.in_(priority_filters))
+        if assignee_filters:
+            qb = qb.filter(Bug.assignee_id.in_(assignee_filters))
         for b in qb.all():
             results.append({
-                "type": "באג", "title": b.title, "description": b.description,
+                "type": "באג", "kind": "bug", "title": b.title, "description": b.description,
                 "status": b.status, "priority": b.priority,
                 "who": b.assignee_name or "", "url": url_for("bug_detail", bug_id=b.id),
             })
 
     users = User.query.order_by(User.display_name).all()
     all_statuses = STATUSES
-    searched = bool(q or type_f or status_f or priority_f or assignee_f)
+    searched = bool(q or type_filters or status_filters or priority_filters or assignee_filters)
     return render_template(
         "search.html", results=results, users=users,
         priorities=PRIORITIES, all_statuses=all_statuses, searched=searched,
         my_default=my_default,
-        q=q, type_f=type_f, status_f=status_f, priority_f=priority_f, assignee_f=assignee_f,
+        q=q, type_filters=type_filters, status_filters=status_filters,
+        priority_filters=priority_filters, assignee_filters=assignee_filters,
     )
 
 
@@ -816,16 +817,16 @@ def search():
 @app.route("/bugs")
 @login_required
 def bugs():
-    status_filter = request.args.get("status", "")
-    assignee_filter = request.args.get("assignee", type=int)
-    priority_filter = request.args.get("priority", "")
+    status_filters = [x for x in request.args.getlist("status") if x]
+    assignee_filters = [int(x) for x in request.args.getlist("assignee") if x.isdigit()]
+    priority_filters = [x for x in request.args.getlist("priority") if x]
     query = Bug.query
-    if status_filter:
-        query = query.filter_by(status=status_filter)
-    if assignee_filter:
-        query = query.filter_by(assignee_id=assignee_filter)
-    if priority_filter:
-        query = query.filter_by(priority=priority_filter)
+    if status_filters:
+        query = query.filter(Bug.status.in_(status_filters))
+    if assignee_filters:
+        query = query.filter(Bug.assignee_id.in_(assignee_filters))
+    if priority_filters:
+        query = query.filter(Bug.priority.in_(priority_filters))
     # פתוחים קודם, ואז לפי תאריך יורד
     bug_list = query.order_by(Bug.status.desc(), Bug.created_at.desc()).all()
     requirements = Requirement.query.order_by(Requirement.title).all()
@@ -838,9 +839,9 @@ def bugs():
         users=users,
         statuses=BUG_STATUSES,
         priorities=PRIORITIES,
-        status_filter=status_filter,
-        assignee_filter=assignee_filter,
-        priority_filter=priority_filter,
+        status_filters=status_filters,
+        assignee_filters=assignee_filters,
+        priority_filters=priority_filters,
         open_count=open_count,
     )
 
@@ -1107,16 +1108,16 @@ def _parse_date(value):
 @app.route("/tasks")
 @login_required
 def tasks():
-    status_filter = request.args.get("status", "")
-    assignee_filter = request.args.get("assignee", type=int)
-    priority_filter = request.args.get("priority", "")
+    status_filters = [x for x in request.args.getlist("status") if x]
+    assignee_filters = [int(x) for x in request.args.getlist("assignee") if x.isdigit()]
+    priority_filters = [x for x in request.args.getlist("priority") if x]
     query = Task.query
-    if status_filter:
-        query = query.filter_by(status=status_filter)
-    if assignee_filter:
-        query = query.filter_by(assignee_id=assignee_filter)
-    if priority_filter:
-        query = query.filter_by(priority=priority_filter)
+    if status_filters:
+        query = query.filter(Task.status.in_(status_filters))
+    if assignee_filters:
+        query = query.filter(Task.assignee_id.in_(assignee_filters))
+    if priority_filters:
+        query = query.filter(Task.priority.in_(priority_filters))
     task_list = query.order_by(Task.status, Task.due_date.is_(None), Task.due_date).all()
     users = User.query.order_by(User.display_name).all()
     open_count = Task.query.filter(Task.status != "בוצע").count()
@@ -1126,9 +1127,9 @@ def tasks():
         users=users,
         statuses=TASK_STATUSES,
         priorities=PRIORITIES,
-        status_filter=status_filter,
-        assignee_filter=assignee_filter,
-        priority_filter=priority_filter,
+        status_filters=status_filters,
+        assignee_filters=assignee_filters,
+        priority_filters=priority_filters,
         open_count=open_count,
         today=date.today(),
     )
@@ -1346,20 +1347,21 @@ def modules_diagram():
 def admin():
     name_q = request.args.get("name", "").strip()
     phone_q = request.args.get("phone", "").strip()
-    role_q = request.args.get("role", "")
+    role_filters = [x for x in request.args.getlist("role") if x]
     query = User.query
     if name_q:
         query = query.filter(User.display_name.ilike(f"%{name_q}%"))
     if phone_q:
         query = query.filter(User.phone.ilike(f"%{phone_q}%"))
-    if role_q == "admin":
-        query = query.filter_by(is_admin=True)
-    elif role_q == "user":
-        query = query.filter_by(is_admin=False)
+    if role_filters and set(role_filters) != {"admin", "user"}:
+        if "admin" in role_filters:
+            query = query.filter_by(is_admin=True)
+        elif "user" in role_filters:
+            query = query.filter_by(is_admin=False)
     users = query.order_by(User.created_at).all()
     return render_template(
         "admin.html", users=users,
-        name_q=name_q, phone_q=phone_q, role_q=role_q,
+        name_q=name_q, phone_q=phone_q, role_filters=role_filters,
     )
 
 

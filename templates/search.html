@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}חיפוש כללי · ניהול דרישות{% endblock %}
+{% block title %}{{ 'הפריטים שלי' if my_default else 'חיפוש כללי' }} · ניהול דרישות{% endblock %}
 {% block content %}
 <main>
   <div class="page-head">
@@ -9,29 +9,37 @@
     </div>
   </div>
 
-  <!-- חיפוש -->
+  <!-- חיפוש: בחירה מרובה -->
   <form class="search-bar" method="get">
-    <input type="text" name="q" value="{{ q }}" placeholder="חיפוש חופשי בכותרת ובתיאור..." style="flex:1;min-width:220px">
-    <select name="type">
-      <option value="">כל הסוגים</option>
-      <option value="requirement" {{ 'selected' if type_f=='requirement' }}>דרישות</option>
-      <option value="task" {{ 'selected' if type_f=='task' }}>משימות</option>
-      <option value="bug" {{ 'selected' if type_f=='bug' }}>באגים</option>
-    </select>
-    <select name="status">
-      <option value="">כל הסטטוסים</option>
-      {% for s in all_statuses %}<option value="{{ s }}" {{ 'selected' if status_f==s }}>{{ s }}</option>{% endfor %}
-    </select>
-    <select name="priority">
-      <option value="">כל העדיפויות</option>
-      {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if priority_f==p }}>{{ p }}</option>{% endfor %}
-    </select>
-    <select name="assignee">
-      <option value="">כל המוקצים</option>
-      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if assignee_f==u.id }}>{{ u.display_name }}</option>{% endfor %}
-    </select>
+    <input type="text" name="q" value="{{ q }}" placeholder="חיפוש חופשי בכותרת ובתיאור..." style="flex:1;min-width:200px">
+    <details class="ms">
+      <summary>סוג{% if type_filters %} ({{ type_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        <label><input type="checkbox" name="type" value="requirement" {{ 'checked' if 'requirement' in type_filters }}> דרישות</label>
+        <label><input type="checkbox" name="type" value="task" {{ 'checked' if 'task' in type_filters }}> משימות</label>
+        <label><input type="checkbox" name="type" value="bug" {{ 'checked' if 'bug' in type_filters }}> באגים</label>
+      </div>
+    </details>
+    <details class="ms">
+      <summary>סטטוס{% if status_filters %} ({{ status_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for s in all_statuses %}<label><input type="checkbox" name="status" value="{{ s }}" {{ 'checked' if s in status_filters }}> {{ s }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>עדיפות{% if priority_filters %} ({{ priority_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for p in priorities %}<label><input type="checkbox" name="priority" value="{{ p }}" {{ 'checked' if p in priority_filters }}> {{ p }}</label>{% endfor %}
+      </div>
+    </details>
+    <details class="ms">
+      <summary>מוקצה{% if assignee_filters %} ({{ assignee_filters|length }}){% endif %}</summary>
+      <div class="ms-menu">
+        {% for u in users %}<label><input type="checkbox" name="assignee" value="{{ u.id }}" {{ 'checked' if u.id in assignee_filters }}> {{ u.display_name }}</label>{% endfor %}
+      </div>
+    </details>
     <button class="btn sm" type="submit">חיפוש</button>
-    {% if searched %}<a class="btn ghost sm" href="{{ url_for('search') }}">ניקוי</a>{% endif %}
+    {% if searched and not my_default %}<a class="btn ghost sm" href="{{ url_for('search') }}">ניקוי</a>{% endif %}
   </form>
 
   {% if searched %}
@@ -43,16 +51,27 @@
     {% for r in results %}
     <div class="req-card" style="{{ 'opacity:.65' if r.status=='בוצע' }}">
       <div class="row1">
-        <h3><a href="{{ r.url }}?back={{ request.full_path|urlencode }}">{{ r.title }}</a></h3>
-        <div style="display:flex;gap:6px;align-items:center">
+        <h3><a href="{{ r.url }}{{ '?back=' + request.full_path|urlencode if r.kind != 'task' }}">{{ r.title }}</a></h3>
+        <div style="display:flex;gap:8px;align-items:center">
           <span class="tag children">{{ r.type }}</span>
           <span class="status status-{{ r.status }}">{{ r.status }}</span>
+          <button type="button" class="btn ghost sm" onclick="toggleCard(this)">▼ פרטים</button>
         </div>
       </div>
-      {% if r.description %}<p class="desc">{{ r.description[:180] }}{{ '…' if r.description|length > 180 }}</p>{% endif %}
-      <div class="req-meta">
-        <span class="prio {{ r.priority }}">עדיפות: {{ r.priority or 'בינונית' }}</span>
-        {% if r.who %}<span class="tag proposer">מוקצה: {{ r.who }}</span>{% endif %}
+      <div class="card-body" style="display:none">
+        {% if r.description %}<p class="desc" style="margin-top:0">{{ r.description[:180] }}{{ '…' if r.description|length > 180 }}</p>{% endif %}
+        <div class="req-meta">
+          <span class="prio {{ r.priority }}">עדיפות: {{ r.priority or 'בינונית' }}</span>
+          {% if r.who %}<span class="tag proposer">מוקצה: {{ r.who }}</span>{% endif %}
+        </div>
+        <div class="req-meta" style="margin-top:10px;gap:6px">
+          {% if r.kind == 'task' %}
+          <a class="btn ghost sm" href="{{ r.url }}">מעבר למשימות</a>
+          {% else %}
+          <a class="btn ghost sm" href="{{ r.url }}?back={{ request.full_path|urlencode }}">פתיחה</a>
+          <a class="btn ghost sm" href="{{ r.url }}?back={{ request.full_path|urlencode }}&edit=1">עריכה</a>
+          {% endif %}
+        </div>
       </div>
     </div>
     {% endfor %}
