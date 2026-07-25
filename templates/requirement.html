@@ -1,66 +1,76 @@
 {% extends "base.html" %}
 {% block title %}{{ req.title }} · ניהול דרישות{% endblock %}
 {% block content %}
-<main>
+<main style="padding-top:14px">
   {% set back = request.args.get('back') %}
-  <div class="crumbs" style="display:flex;align-items:center;gap:12px">
+  <div class="crumbs" style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
     {% if back %}<a class="btn ghost sm" href="{{ back }}">→ חזרה לתוצאות</a>{% else %}<button type="button" class="btn ghost sm" onclick="history.back()">→ חזרה</button>{% endif %}
-    {% if req.parent %}
-      <span><a href="{{ url_for('index') }}">דרישות</a> › <a href="{{ url_for('requirement_detail', req_id=req.parent.id) }}{% if back %}?back={{ back|urlencode }}{% endif %}">{{ req.parent.title }}</a> › תת-דרישה</span>
-    {% else %}
-      <span><a href="{{ url_for('index') }}">דרישות</a> › {{ req.title }}</span>
-    {% endif %}
+    <span><a href="{{ url_for('index') }}">דרישות</a> › {{ req.title }}</span>
   </div>
 
-  <!-- כותרת + פעולות -->
-  <div class="page-head">
+  <!-- כותרת + פעולות (קומפקטי) -->
+  <div class="page-head" style="margin-bottom:12px">
     <div>
-      <h1>{{ req.title }}</h1>
-      <p class="sub">
-        נוצרה ב-{{ req.created_at.strftime('%d/%m/%Y') }}
-        {% if req.creator %} · הוזנה ע"י {{ req.creator.display_name }}{% endif %}
-      </p>
-      <div class="req-meta" style="margin-top:8px">
+      <h1 style="font-size:22px;margin-bottom:2px">{{ req.title }}</h1>
+      <div class="req-meta" style="margin-top:6px">
         <span class="status status-{{ req.status }}">{{ req.status }}</span>
-        <span class="prio {{ req.priority }}">עדיפות: {{ req.priority }}</span>
-        {% if req.proposer %}<span class="tag proposer">הציע/ה: {{ req.proposer.display_name }}</span>{% endif %}
-        {% if req.implementer_name %}<span class="tag proposer">מוקצה לביצוע: {{ req.implementer_name }}</span>{% endif %}
-        {% if req.actual_implementer_name %}<span class="tag" style="background:var(--ok-soft);color:var(--ok)">מימש/ה בפועל: {{ req.actual_implementer_name }}</span>{% endif %}
+        <span class="prio {{ req.priority }}">{{ req.priority }}</span>
         {% if req.module %}<span class="tag"><span class="swatch" style="background:{{ req.module.color }}"></span>{{ req.module.name }}</span>{% endif %}
+        {% if req.proposer %}<span class="tag proposer">הציע/ה: {{ req.proposer.display_name }}</span>{% endif %}
+        {% if req.implementer_name %}<span class="tag proposer">מוקצה: {{ req.implementer_name }}</span>{% endif %}
+        {% if req.actual_implementer_name %}<span class="tag" style="background:var(--ok-soft);color:var(--ok)">מימש/ה בפועל: {{ req.actual_implementer_name }}</span>{% endif %}
+        <span class="prio">{{ req.created_at.strftime('%d/%m/%Y') }}{% if req.creator %} · {{ req.creator.display_name }}{% endif %}</span>
       </div>
     </div>
     <div style="display:flex;gap:8px">
       <button type="button" class="btn ghost sm" onclick="toggleEdit()">עריכה</button>
-      <details style="display:inline-block">
-        <summary class="btn ghost sm" style="list-style:none">העברה</summary>
-        <div class="panel" style="margin-top:10px;min-width:290px;position:absolute;z-index:40;left:0">
-          <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">
-            {% if req.parent %}הדרישה היא כרגע תת-דרישה של "{{ req.parent.title }}".{% else %}הדרישה היא כרגע דרישה ראשית.{% endif %}
-          </p>
-          <form method="post" action="{{ url_for('requirement_move', req_id=req.id) }}">
-            <div class="field">
-              <label>העברה אל</label>
-              <select name="new_parent_id">
-                <option value="">— דרישה ראשית (ללא אם) —</option>
-                {% for t in move_targets %}
-                <option value="{{ t.id }}" {{ 'selected' if req.parent_id==t.id }}>תת-דרישה של: {{ t.title }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <button class="btn sm" type="submit">העברה</button>
-          </form>
-        </div>
-      </details>
       <form class="inline-form" method="post" action="{{ url_for('requirement_delete', req_id=req.id) }}"
-            onsubmit="return confirm('למחוק את הדרישה{% if req.children %} ואת כל תתי-הדרישות שלה{% endif %}?');">
+            onsubmit="return confirm('למחוק את הדרישה?');">
         <button class="btn danger sm" type="submit">מחיקה</button>
       </form>
     </div>
   </div>
 
+  <!-- תיאור — שורה מתקפלת -->
+  {% if req.description %}
+  <details class="add-box" style="margin-bottom:10px">
+    <summary>תיאור</summary>
+    <div class="panel" style="padding:14px 16px"><p style="margin:0;white-space:pre-wrap">{{ req.description }}</p></div>
+  </details>
+  {% endif %}
+
+  <!-- קבצים — שורה מתקפלת -->
+  {% if req.attachments %}
+  <details class="add-box" style="margin-bottom:10px">
+    <summary>קבצים מצורפים ({{ req.attachments|length }})</summary>
+    <div class="panel" style="padding:14px 16px">
+      <div class="attach-grid" style="margin-top:0">
+        {% for a in req.attachments %}
+        <div class="attach-item">
+          {% if a.is_image %}
+          <a href="{{ url_for('attachment_view', att_id=a.id) }}" target="_blank"><img src="{{ url_for('attachment_view', att_id=a.id) }}" alt="{{ a.filename }}"></a>
+          {% else %}
+          <a href="{{ url_for('attachment_view', att_id=a.id) }}" target="_blank"><div class="file-ic">📄</div></a>
+          {% endif %}
+          <div class="att-meta">
+            <span class="att-name">{{ a.filename }}</span>
+            <div class="att-actions">
+              <a href="{{ url_for('attachment_view', att_id=a.id) }}" target="_blank">פתיחה</a>
+              <form method="post" action="{{ url_for('attachment_delete', att_id=a.id) }}" onsubmit="return confirm('למחוק את הקובץ?');">
+                <button type="submit">מחיקה</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
+  {% endif %}
+
   <!-- טופס עריכה (מוסתר עד לחיצה על 'עריכה') -->
-  <div id="editPanel" class="panel" style="display:none;margin-bottom:22px">
-    <h1 style="font-size:18px;margin:0 0 14px;font-family:'Rubik'">עריכת הדרישה</h1>
+  <div id="editPanel" class="panel" style="display:none;margin-bottom:14px">
+    <h1 style="font-size:17px;margin:0 0 12px;font-family:'Rubik'">עריכת הדרישה</h1>
     <form method="post" action="{{ url_for('requirement_edit', req_id=req.id) }}">
       <div class="grid2">
         <div class="field" style="grid-column:1 / -1">
@@ -93,6 +103,10 @@
           </select>
         </div>
         <div class="field">
+          <label>עדיפות</label>
+          <select name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if req.priority==p }}>{{ p }}</option>{% endfor %}</select>
+        </div>
+        <div class="field">
           <label>סטטוס</label>
           <select name="status" id="statusSelect" onchange="toggleActualField()">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if req.status==s }}>{{ s }}</option>{% endfor %}</select>
         </div>
@@ -103,132 +117,28 @@
             {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if req.actual_implementer_id==u.id }}>{{ u.display_name }}</option>{% endfor %}
           </select>
         </div>
-        <div class="field">
-          <label>עדיפות</label>
-          <select name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if req.priority==p }}>{{ p }}</option>{% endfor %}</select>
-        </div>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn" type="submit">שמירת שינויים</button>
         <button type="button" class="btn ghost" onclick="toggleEdit()">ביטול</button>
       </div>
     </form>
-  </div>
-
-  <!-- תיאור -->
-  {% if req.description %}
-  <div class="panel" style="margin-bottom:20px">
-    <label style="font-size:14px;font-weight:600;color:var(--ink-soft)">תיאור</label>
-    <p style="margin:6px 0 0;white-space:pre-wrap">{{ req.description }}</p>
-  </div>
-  {% endif %}
-
-  <!-- קבצים מצורפים -->
-  <div id="files" class="panel" style="margin-bottom:20px">
-    <div class="page-head" style="margin:0 0 10px"><h1 style="font-size:18px">קבצים מצורפים {% if req.attachments %}({{ req.attachments|length }}){% endif %}</h1></div>
-    <form method="post" action="{{ url_for('requirement_attach', req_id=req.id) }}" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input type="file" name="file" required style="flex:1;min-width:180px">
-      <button class="btn sm" type="submit">העלאה</button>
-    </form>
-    {% if req.attachments %}
-    <div class="attach-grid">
-      {% for a in req.attachments %}
-      <div class="attach-item">
-        {% if a.is_image %}
-        <a href="{{ url_for('attachment_view', att_id=a.id) }}" target="_blank"><img src="{{ url_for('attachment_view', att_id=a.id) }}" alt="{{ a.filename }}"></a>
-        {% else %}
-        <a href="{{ url_for('attachment_view', att_id=a.id) }}" target="_blank"><div class="file-ic">📄</div></a>
-        {% endif %}
-        <div class="att-meta">
-          <span class="att-name">{{ a.filename }}</span>
-          <div class="att-actions">
-            <a href="{{ url_for('attachment_view', att_id=a.id) }}" target="_blank">פתיחה</a>
-            <form method="post" action="{{ url_for('attachment_delete', att_id=a.id) }}" onsubmit="return confirm('למחוק את הקובץ?');">
-              <button type="submit">מחיקה</button>
-            </form>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p style="color:var(--ink-soft);margin:10px 0 0">אין קבצים מצורפים.</p>
-    {% endif %}
-  </div>
-
-  <!-- תתי-דרישות -->
-  <div class="page-head" style="margin-bottom:14px">
-    <h1 style="font-size:20px">תתי-דרישות {% if req.children %}({{ req.children|length }}){% endif %}</h1>
-  </div>
-  <details class="add-box">
-    <summary>הוספת תת-דרישה</summary>
-    <div class="panel">
-      <form method="post" action="{{ url_for('requirement_add') }}">
-        <input type="hidden" name="parent_id" value="{{ req.id }}">
-        <div class="field">
-          <label>כותרת תת-הדרישה</label>
-          <input type="text" name="title" required>
-        </div>
-        <div class="field">
-          <label>תיאור</label>
-          <textarea name="description"></textarea>
-        </div>
-        <div class="grid2">
-          <div class="field">
-            <label>מי הציע/ה</label>
-            <select name="proposer_id">
-              <option value="">— לא צוין —</option>
-              {% for u in users %}<option value="{{ u.id }}">{{ u.display_name }}</option>{% endfor %}
-            </select>
-          </div>
-          <div class="field">
-            <label>מודול</label>
-            <select name="module_id">
-              <option value="">— יורש מהאב —</option>
-              {% for m in modules %}<option value="{{ m.id }}">{{ m.select_label or m.name }}</option>{% endfor %}
-            </select>
-          </div>
-          <div class="field">
-            <label>סטטוס</label>
-            <select name="status">{% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
-          </div>
-          <div class="field">
-            <label>עדיפות</label>
-            <select name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if p=='בינונית' }}>{{ p }}</option>{% endfor %}</select>
-          </div>
-        </div>
-        <button class="btn" type="submit">הוספה</button>
+    <!-- העלאת קובץ — חלק מהעריכה -->
+    <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
+      <form method="post" action="{{ url_for('requirement_attach', req_id=req.id) }}" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:14px;font-weight:600">צירוף קובץ:</label>
+        <input type="file" name="file" required style="flex:1;min-width:180px">
+        <button class="btn sm" type="submit">העלאה</button>
       </form>
     </div>
-  </details>
-
-  {% if req.children %}
-  <div class="subtree">
-    {% for c in req.children %}
-    <div class="sub-item">
-      <div class="row1">
-        <h4><a href="{{ url_for('requirement_detail', req_id=c.id) }}{% if back %}?back={{ back|urlencode }}{% endif %}">{{ c.title }}</a></h4>
-        <span class="status status-{{ c.status }}">{{ c.status }}</span>
-      </div>
-      {% if c.description %}<p class="desc" style="margin:6px 0 0">{{ c.description }}</p>{% endif %}
-      <div class="req-meta">
-        {% if c.module %}<span class="tag"><span class="swatch" style="background:{{ c.module.color }}"></span>{{ c.module.name }}</span>{% endif %}
-        {% if c.proposer %}<span class="tag proposer">הציע/ה: {{ c.proposer.display_name }}</span>{% endif %}
-        {% if c.children %}<span class="tag children">{{ c.children|length }} תתי-דרישות</span>{% endif %}
-      </div>
-    </div>
-    {% endfor %}
   </div>
-  {% else %}
-  <p style="color:var(--ink-soft)">עדיין אין תתי-דרישות.</p>
-  {% endif %}
 
   <!-- צ'אט -->
-  <div id="chat" class="page-head" style="margin:28px 0 14px">
-    <h1 style="font-size:20px">צ'אט {% if req.comments %}({{ req.comments|length }}){% endif %}</h1>
+  <div id="chat" class="page-head" style="margin:0 0 10px">
+    <h1 style="font-size:18px">צ'אט {% if req.comments %}({{ req.comments|length }}){% endif %}</h1>
   </div>
   {% if req.comments %}
-  <div class="chat-list">
+  <div class="chat-list" style="max-height:34vh;overflow-y:auto">
     {% for cm in req.comments %}
     <div class="chat-msg {{ 'mine' if cm.author_id == current_user.id }}">
       <div class="chat-head"><strong>{{ cm.author_name }}</strong><span>{{ cm.created_at|israel_time }}</span></div>
@@ -237,15 +147,15 @@
     {% endfor %}
   </div>
   {% else %}
-  <p style="color:var(--ink-soft)">אין עדיין הודעות בצ'אט. פתחי את השיחה.</p>
+  <p style="color:var(--ink-soft);margin:0 0 10px">אין עדיין הודעות בצ'אט. פתחי את השיחה.</p>
   {% endif %}
 
-  <div class="panel" style="margin-top:14px">
+  <div class="panel" style="margin-top:10px;padding:14px 16px">
     <div class="mention-hint">לתיוג משתמש: הקלד/י <strong>@</strong> ואז את השם, ובחר/י מהרשימה שתופיע. המתויגים יקבלו התראה.</div>
     <form method="post" action="{{ url_for('comment_add', req_id=req.id) }}">
-      <div class="field mention-wrap">
+      <div class="field mention-wrap" style="margin-bottom:10px">
         <label>הודעה חדשה</label>
-        <textarea name="body" data-mention required placeholder="כתבי הודעה... (לתיוג: @שם)"></textarea>
+        <textarea name="body" data-mention required placeholder="כתבי הודעה... (לתיוג: @שם)" style="min-height:64px"></textarea>
       </div>
       <button class="btn" type="submit">שליחה</button>
     </form>
@@ -267,7 +177,11 @@
       var f = document.getElementById('actualField');
       if (sel && f) f.style.display = (sel.value === 'בוצע') ? 'block' : 'none';
     }
-    document.addEventListener('DOMContentLoaded', toggleActualField);
+    document.addEventListener('DOMContentLoaded', function () {
+      toggleActualField();
+      // פתיחת העריכה אוטומטית כשמגיעים מכפתור 'עריכה' ברשימה
+      if (new URLSearchParams(location.search).get('edit') === '1') toggleEdit();
+    });
   </script>
 </main>
 {% endblock %}

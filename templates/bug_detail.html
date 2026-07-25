@@ -155,6 +155,9 @@
       p.style.display = show ? 'block' : 'none';
       if (show) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    document.addEventListener('DOMContentLoaded', function () {
+      if (new URLSearchParams(location.search).get('edit') === '1') toggleEdit();
+    });
   </script>
 </main>
 {% endblock %}

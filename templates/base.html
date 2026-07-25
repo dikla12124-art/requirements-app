@@ -51,6 +51,16 @@
 </div>
 
 <script>
+// פתיחה/סגירה של פרטי כרטיס ברשימות
+function toggleCard(btn) {
+  var card = btn.closest('.req-card');
+  var body = card ? card.querySelector('.card-body') : null;
+  if (!body) return;
+  var show = body.style.display === 'none' || !body.style.display;
+  body.style.display = show ? 'block' : 'none';
+  btn.textContent = show ? '▲ סגירה' : '▼ פרטים';
+}
+
 // השלמת @ אוטומטית לתיוג משתמשים בצ'אט
 (function () {
   function attach(ta) {

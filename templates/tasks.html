@@ -76,9 +76,13 @@
     <div class="req-card" style="{{ 'opacity:.65' if t.status=='בוצע' }}">
       <div class="row1">
         <h3>{{ t.title }}</h3>
-        <span class="status status-{{ t.status }}">{{ t.status }}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="status status-{{ t.status }}">{{ t.status }}</span>
+          <button type="button" class="btn ghost sm" onclick="toggleCard(this)">▼ פרטים</button>
+        </div>
       </div>
-      {% if t.description %}<p class="desc">{{ t.description }}</p>{% endif %}
+      <div class="card-body" style="display:none">
+      {% if t.description %}<p class="desc" style="margin-top:0">{{ t.description }}</p>{% endif %}
 
       <div class="req-meta">
         {% if t.assignee_name %}<span class="tag proposer">אחראי: {{ t.assignee_name }}</span>{% else %}<span class="tag">לא שויך</span>{% endif %}
@@ -126,6 +130,7 @@
               onsubmit="return confirm('למחוק את המשימה?');">
           <button class="btn danger sm" type="submit">מחיקה</button>
         </form>
+      </div>
       </div>
     </div>
     {% endfor %}

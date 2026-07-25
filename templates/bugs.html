@@ -77,8 +77,12 @@
     <div class="req-card" style="{{ 'opacity:.7' if b.status=='בוצע' }}">
       <div class="row1">
         <h3><a href="{{ url_for('bug_detail', bug_id=b.id) }}?back={{ request.full_path|urlencode }}">{{ b.title }}</a></h3>
-        <span class="status status-{{ b.status }}">{{ b.status }}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="status status-{{ b.status }}">{{ b.status }}</span>
+          <button type="button" class="btn ghost sm" onclick="toggleCard(this)">▼ פרטים</button>
+        </div>
       </div>
+      <div class="card-body" style="display:none">
       {% if b.description %}<p class="desc">{{ b.description }}</p>{% endif %}
       {% if b.solution %}<p class="desc"><strong>רעיון לפתרון:</strong> {{ b.solution }}</p>{% endif %}
 
@@ -131,6 +135,8 @@
               onsubmit="return confirm('למחוק את הבאג?');">
           <button class="btn danger sm" type="submit">מחיקה</button>
         </form>
+        <a class="btn ghost sm" href="{{ url_for('bug_detail', bug_id=b.id) }}?back={{ request.full_path|urlencode }}&edit=1">עריכה</a>
+      </div>
       </div>
     </div>
     {% endfor %}

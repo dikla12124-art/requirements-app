@@ -42,7 +42,7 @@ STATUSES = ["חדש", "בתהליך", "בוצע"]
 PRIORITIES = ["נמוכה", "בינונית", "גבוהה", "קריטית"]
 
 # תווית גרסה — לבדיקה שהפריסה התעדכנה
-APP_VERSION = "גרסה 3.14 · תתי-דרישות בחיפוש והעברה"
+APP_VERSION = "גרסה 3.16 · תצוגה קומפקטית"
 
 
 # ---------------------------------------------------------------------------
@@ -317,9 +317,7 @@ def inject_user():
     if u:
         unread = Notification.query.filter_by(user_id=u.id, is_read=False).count()
         # מונה פריטים שלא בוצעו לכל טאב
-        nav["req"] = Requirement.query.filter(
-            Requirement.parent_id.is_(None), Requirement.status != "בוצע"
-        ).count()
+        nav["req"] = Requirement.query.filter(Requirement.status != "בוצע").count()
         nav["bug"] = Bug.query.filter(Bug.status != "בוצע").count()
         nav["task"] = Task.query.filter(Task.status != "בוצע").count()
         # אינדיקציית לוג חדש (לאדמין בלבד): רשומות חדשות ממשתמש אחר
@@ -372,7 +370,7 @@ def admin_required(f):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user():
-        return redirect(url_for("index"))
+        return redirect(url_for("search"))
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -380,7 +378,7 @@ def login():
         if user and user.check_password(password):
             session["user_id"] = user.id
             log_action("כניסה למערכת")
-            return redirect(url_for("index"))
+            return redirect(url_for("search"))
         flash("שם משתמש או סיסמה שגויים", "error")
     return render_template("login.html")
 
@@ -404,10 +402,7 @@ def index():
     implementer_filter = request.args.get("implementer", type=int)
     priority_filter = request.args.get("priority", "")
 
-    has_filter = any([module_filter, status_filter, proposer_filter,
-                      implementer_filter, priority_filter])
-    # ללא חיפוש: רק דרישות ראשיות. עם חיפוש: גם תתי-דרישות תואמות.
-    query = Requirement.query if has_filter else Requirement.query.filter_by(parent_id=None)
+    query = Requirement.query
     if module_filter:
         query = query.filter_by(module_id=module_filter)
     if status_filter:
@@ -441,7 +436,7 @@ def index():
 # ייצוא וייבוא דרישות — Excel
 # ---------------------------------------------------------------------------
 EXCEL_HEADERS = ["מזהה", "כותרת", "תיאור", "סטטוס", "עדיפות", "מודול",
-                 "מי הציע", "מי מימש", "דרישת אב (מזהה)", "נוצרה בתאריך"]
+                 "מי הציע", "מוקצה לביצוע", "נוצרה בתאריך"]
 
 
 @app.route("/requirements/export")
@@ -454,9 +449,7 @@ def requirements_export():
     ws.sheet_view.rightToLeft = True
     ws.append(EXCEL_HEADERS)
     # כל הדרישות: אבות קודם ואז ילדים, כדי שהייבוא יוכל לקשר
-    all_reqs = Requirement.query.order_by(
-        Requirement.parent_id.isnot(None), Requirement.id
-    ).all()
+    all_reqs = Requirement.query.order_by(Requirement.id).all()
     for r in all_reqs:
         ws.append([
             r.id,
@@ -467,11 +460,10 @@ def requirements_export():
             r.module.name if r.module else "",
             r.proposer.display_name if r.proposer else "",
             r.implementer_name or "",
-            r.parent_id or "",
             r.created_at.strftime("%d/%m/%Y") if r.created_at else "",
         ])
     # רוחב עמודות סביר
-    for col, w in zip("ABCDEFGHIJ", (8, 40, 50, 12, 12, 18, 18, 18, 16, 14)):
+    for col, w in zip("ABCDEFGHI", (8, 40, 50, 12, 12, 18, 18, 18, 14)):
         ws.column_dimensions[col].width = w
     buf = io.BytesIO()
     wb.save(buf)
@@ -505,66 +497,42 @@ def requirements_import():
     users_by_name = {u.display_name: u for u in User.query.all()}
     modules_by_name = {m.name: m for m in Module.query.all()}
 
-    id_map = {}   # מזהה מהקובץ -> דרישה חדשה (לקישור אב-ילד)
     created = 0
     skipped = 0
-    # שני מעברים: קודם דרישות-אב (ללא אב), ואז ילדים
+
     def row_get(row, i):
         return (str(row[i]).strip() if i < len(row) and row[i] is not None else "")
 
-    parsed = []
     for row in rows:
         title = row_get(row, 1)
         if not title:
             skipped += 1
             continue
-        parsed.append({
-            "file_id": row_get(row, 0),
-            "title": title,
-            "description": row_get(row, 2),
-            "status": row_get(row, 3) if row_get(row, 3) in STATUSES else "חדש",
-            "priority": row_get(row, 4) if row_get(row, 4) in PRIORITIES else "בינונית",
-            "module": row_get(row, 5),
-            "proposer": row_get(row, 6),
-            "implementer": row_get(row, 7),
-            "parent_file_id": row_get(row, 8),
-        })
-
-    for phase_parents in (True, False):
-        for p in parsed:
-            is_parent = not p["parent_file_id"]
-            if is_parent != phase_parents:
-                continue
-            module = modules_by_name.get(p["module"])
-            # מודול חדש נוצר אוטומטית אם לא קיים
-            if p["module"] and not module:
-                module = Module(name=p["module"])
-                db.session.add(module)
-                db.session.flush()
-                modules_by_name[p["module"]] = module
-            proposer = users_by_name.get(p["proposer"])
-            implementer = users_by_name.get(p["implementer"])
-            parent_id = None
-            if p["parent_file_id"]:
-                parent = id_map.get(p["parent_file_id"])
-                parent_id = parent.id if parent else None
-            req = Requirement(
-                title=p["title"],
-                description=p["description"],
-                status=p["status"],
-                priority=p["priority"],
-                module_id=module.id if module else None,
-                proposer_id=proposer.id if proposer else None,
-                implementer_id=implementer.id if implementer else None,
-                implementer_name=implementer.display_name if implementer else (p["implementer"] or ""),
-                parent_id=parent_id,
-                created_by_id=me.id,
-            )
-            db.session.add(req)
+        module_name = row_get(row, 5)
+        module = modules_by_name.get(module_name)
+        # מודול חדש נוצר אוטומטית אם לא קיים
+        if module_name and not module:
+            module = Module(name=module_name)
+            db.session.add(module)
             db.session.flush()
-            if p["file_id"]:
-                id_map[p["file_id"]] = req
-            created += 1
+            modules_by_name[module_name] = module
+        proposer = users_by_name.get(row_get(row, 6))
+        implementer = users_by_name.get(row_get(row, 7))
+        status = row_get(row, 3) if row_get(row, 3) in STATUSES else "חדש"
+        priority = row_get(row, 4) if row_get(row, 4) in PRIORITIES else "בינונית"
+        req = Requirement(
+            title=title,
+            description=row_get(row, 2),
+            status=status,
+            priority=priority,
+            module_id=module.id if module else None,
+            proposer_id=proposer.id if proposer else None,
+            implementer_id=implementer.id if implementer else None,
+            implementer_name=implementer.display_name if implementer else (row_get(row, 7) or ""),
+            created_by_id=me.id,
+        )
+        db.session.add(req)
+        created += 1
     db.session.commit()
     log_action("ייבוא דרישות מאקסל", f"{created} נוספו, {skipped} דולגו")
     flash(f"ייבוא הושלם: {created} דרישות נוספו" + (f", {skipped} שורות דולגו (ללא כותרת)" if skipped else ""), "ok")
@@ -579,15 +547,6 @@ def requirement_detail(req_id):
         abort(404)
     modules = modules_for_select()
     users = User.query.order_by(User.display_name).all()
-    # יעדים אפשריים להעברה: כל הדרישות פרט לדרישה עצמה ולצאצאיה
-    exclude = set()
-    stack = [req]
-    while stack:
-        node = stack.pop()
-        exclude.add(node.id)
-        stack.extend(node.children)
-    move_targets = [r for r in Requirement.query.order_by(Requirement.title).all()
-                    if r.id not in exclude]
     return render_template(
         "requirement.html",
         req=req,
@@ -595,7 +554,6 @@ def requirement_detail(req_id):
         users=users,
         statuses=STATUSES,
         priorities=PRIORITIES,
-        move_targets=move_targets,
     )
 
 
@@ -607,7 +565,6 @@ def requirement_add():
         flash("חובה להזין כותרת לדרישה", "error")
         return redirect(request.referrer or url_for("index"))
 
-    parent_id = request.form.get("parent_id", type=int)
     module_id = request.form.get("module_id", type=int) or None
     proposer_id = request.form.get("proposer_id", type=int) or None
     implementer_id = request.form.get("implementer_id", type=int) or None
@@ -625,15 +582,12 @@ def requirement_add():
         proposer_id=proposer_id,
         implementer_id=implementer_id,
         implementer_name=implementer_name,
-        parent_id=parent_id,
         created_by_id=current_user().id,
     )
     db.session.add(req)
     db.session.commit()
-    log_action("הוספת תת-דרישה" if parent_id else "הוספת דרישה", title)
+    log_action("הוספת דרישה", title)
     flash("הדרישה נוספה בהצלחה", "ok")
-    if parent_id:
-        return redirect(url_for("requirement_detail", req_id=parent_id))
     return redirect(url_for("index"))
 
 
@@ -689,62 +643,19 @@ def requirement_edit(req_id):
     return redirect(request.referrer or url_for("requirement_detail", req_id=req_id))
 
 
-@app.route("/requirement/<int:req_id>/move", methods=["POST"])
-@login_required
-def requirement_move(req_id):
-    req = db.session.get(Requirement, req_id)
-    if not req:
-        abort(404)
-    new_parent_id = request.form.get("new_parent_id", type=int) or None
-
-    if new_parent_id:
-        if new_parent_id == req.id:
-            flash("לא ניתן להעביר דרישה תחת עצמה", "error")
-            return redirect(url_for("requirement_detail", req_id=req_id))
-        new_parent = db.session.get(Requirement, new_parent_id)
-        if not new_parent:
-            flash("דרישת היעד לא נמצאה", "error")
-            return redirect(url_for("requirement_detail", req_id=req_id))
-        # הגנה ממעגל: היעד לא יכול להיות צאצא של הדרישה המועברת
-        node = new_parent
-        while node:
-            if node.id == req.id:
-                flash("לא ניתן להעביר דרישה תחת תת-דרישה שלה", "error")
-                return redirect(url_for("requirement_detail", req_id=req_id))
-            node = node.parent
-
-    old_parent = req.parent.title if req.parent else "ראשית"
-    req.parent_id = new_parent_id
-    db.session.commit()
-    new_parent_title = req.parent.title if req.parent else "ראשית"
-    log_action("העברת דרישה", req.title, f"מ-{old_parent} ל-{new_parent_title}")
-    flash("הדרישה הועברה בהצלחה", "ok")
-    return redirect(url_for("requirement_detail", req_id=req_id))
-
-
 @app.route("/requirement/<int:req_id>/delete", methods=["POST"])
 @login_required
 def requirement_delete(req_id):
     req = db.session.get(Requirement, req_id)
     if not req:
         abort(404)
-    parent_id = req.parent_id
     req_title = req.title
-
-    # איסוף הדרישה וכל צאצאיה (תתי-דרישות בכל עומק)
-    ids = []
-    stack = [req]
-    while stack:
-        node = stack.pop()
-        ids.append(node.id)
-        stack.extend(node.children)
-
-    # ניתוק רשומות שמפנות לדרישות (PostgreSQL אוכף מפתחות זרים):
-    # באגים מקושרים — נשארים, רק הקישור מתנתק; התראות על הדרישות — נמחקות.
+    # ניתוק רשומות שמפנות לדרישה (PostgreSQL אוכף מפתחות זרים):
+    # באגים מקושרים — נשארים, רק הקישור מתנתק; התראות — נמחקות.
     try:
-        Bug.query.filter(Bug.requirement_id.in_(ids)).update(
+        Bug.query.filter_by(requirement_id=req.id).update(
             {"requirement_id": None}, synchronize_session=False)
-        Notification.query.filter(Notification.requirement_id.in_(ids)).delete(
+        Notification.query.filter_by(requirement_id=req.id).delete(
             synchronize_session=False)
         db.session.delete(req)  # תגובות וקבצים נמחקים בקסקדה
         db.session.commit()
@@ -755,8 +666,6 @@ def requirement_delete(req_id):
 
     log_action("מחיקת דרישה", req_title)
     flash("הדרישה נמחקה", "ok")
-    if parent_id:
-        return redirect(url_for("requirement_detail", req_id=parent_id))
     return redirect(url_for("index"))
 
 
@@ -831,6 +740,11 @@ def search():
     status_f = request.args.get("status", "")
     priority_f = request.args.get("priority", "")
     assignee_f = request.args.get("assignee", type=int)
+    # דף הבית: כניסה ללא פרמטרים מציגה את הפריטים של המשתמש המחובר
+    my_default = False
+    if not request.args:
+        assignee_f = current_user().id
+        my_default = True
     results = []
     like = f"%{q}%"
 
@@ -891,6 +805,7 @@ def search():
     return render_template(
         "search.html", results=results, users=users,
         priorities=PRIORITIES, all_statuses=all_statuses, searched=searched,
+        my_default=my_default,
         q=q, type_f=type_f, status_f=status_f, priority_f=priority_f, assignee_f=assignee_f,
     )
 
@@ -1634,11 +1549,67 @@ def migrate_statuses():
             print(f"[migrate] דילוג על מילוי עדיפות ב-{table}: {e}")
 
 
+def merge_subrequirements():
+    """
+    מיזוג תתי-דרישות לתוך דרישת-האב: התיאור מצורף לתיאור האב,
+    והתגובות, הקבצים, הבאגים וההתראות עוברים לאב. שום תוכן לא נמחק —
+    רק רשומת תת-הדרישה עצמה מוסרת אחרי שהכל הועבר. אידמפוטנטי.
+    מטופל מהעלים פנימה כדי לתמוך בהיררכיה רב-שלבית.
+    """
+    try:
+        merged = 0
+        while True:
+            children = Requirement.query.filter(Requirement.parent_id.isnot(None)).all()
+            if not children:
+                break
+            child_ids = {c.id for c in children}
+            # עלים: תתי-דרישות שאין להן ילדים משלהן
+            leaves = [c for c in children
+                      if not any(g.parent_id == c.id for g in children)]
+            if not leaves:
+                leaves = children  # הגנה מלולאה אינסופית
+            for child in leaves:
+                parent = db.session.get(Requirement, child.parent_id)
+                if not parent:
+                    child.parent_id = None
+                    continue
+                # צירוף התוכן לאב
+                extra = f"\n\n— מוזג מתת-דרישה \"{child.title}\" —"
+                details = []
+                if child.status:
+                    details.append(f"סטטוס: {child.status}")
+                if child.implementer_name:
+                    details.append(f"מוקצה: {child.implementer_name}")
+                if details:
+                    extra += f" ({', '.join(details)})"
+                if child.description:
+                    extra += f"\n{child.description}"
+                parent.description = (parent.description or "") + extra
+                # העברת תוכן מקושר לאב
+                Comment.query.filter_by(requirement_id=child.id).update(
+                    {"requirement_id": parent.id}, synchronize_session=False)
+                Attachment.query.filter_by(requirement_id=child.id).update(
+                    {"requirement_id": parent.id}, synchronize_session=False)
+                Bug.query.filter_by(requirement_id=child.id).update(
+                    {"requirement_id": parent.id}, synchronize_session=False)
+                Notification.query.filter_by(requirement_id=child.id).update(
+                    {"requirement_id": parent.id}, synchronize_session=False)
+                db.session.delete(child)
+                merged += 1
+            db.session.commit()
+        if merged:
+            print(f"[migrate] {merged} תתי-דרישות מוזגו לדרישות-האב")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[migrate] דילוג על מיזוג תתי-דרישות: {e}")
+
+
 def init_db():
     with app.app_context():
         db.create_all()
         ensure_schema()
         migrate_statuses()
+        merge_subrequirements()
         if not User.query.first():
             admin_username = os.environ.get("ADMIN_USERNAME", "dikla")
             admin_password = os.environ.get("ADMIN_PASSWORD", "changeme123")

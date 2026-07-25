@@ -3,7 +3,10 @@
 {% block content %}
 <main>
   <div class="page-head">
-    <div><h1>חיפוש כללי</h1><p class="sub">חיפוש בכל המאגר — דרישות, משימות ובאגים יחד</p></div>
+    <div>
+      <h1>{{ 'הפריטים שלי' if my_default else 'חיפוש כללי' }}</h1>
+      <p class="sub">{% if my_default %}הדרישות, המשימות והבאגים שמוקצים לך · אפשר לשנות את החיפוש למטה{% else %}חיפוש בכל המאגר — דרישות, משימות ובאגים יחד{% endif %}</p>
+    </div>
   </div>
 
   <!-- חיפוש -->
@@ -38,7 +41,7 @@
   {% if results %}
   <div class="req-list">
     {% for r in results %}
-    <div class="req-card">
+    <div class="req-card" style="{{ 'opacity:.65' if r.status=='בוצע' }}">
       <div class="row1">
         <h3><a href="{{ r.url }}?back={{ request.full_path|urlencode }}">{{ r.title }}</a></h3>
         <div style="display:flex;gap:6px;align-items:center">

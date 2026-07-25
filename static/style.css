@@ -280,3 +280,7 @@ select[multiple] { padding: 4px; }
   display: inline-block; width: 9px; height: 9px; border-radius: 50%;
   background: var(--err); vertical-align: super;
 }
+
+/* ---------- Collapsed list cards ---------- */
+.card-body { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.req-card .row1 { margin-bottom: 0; }

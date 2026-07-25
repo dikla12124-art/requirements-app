@@ -14,7 +14,6 @@
         <div class="panel" style="margin-top:10px;min-width:280px;position:absolute;z-index:40">
           <p style="font-size:13px;color:var(--ink-soft);margin:0 0 10px">
             קובץ .xlsx באותו פורמט של הייצוא. שורות ללא כותרת ידולגו.
-            קישור אב-ילד נשמר לפי עמודת "דרישת אב (מזהה)".
           </p>
           <form method="post" action="{{ url_for('requirements_import') }}" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center">
             <input type="file" name="file" accept=".xlsx" required style="flex:1">
@@ -111,19 +110,30 @@
   {% if requirements %}
   <div class="req-list">
     {% for r in requirements %}
-    <div class="req-card">
+    <div class="req-card" style="{{ 'opacity:.65' if r.status=='בוצע' }}">
       <div class="row1">
         <h3><a href="{{ url_for('requirement_detail', req_id=r.id) }}?back={{ request.full_path|urlencode }}">{{ r.title }}</a></h3>
-        <span class="status status-{{ r.status }}">{{ r.status }}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="status status-{{ r.status }}">{{ r.status }}</span>
+          <button type="button" class="btn ghost sm" onclick="toggleCard(this)">▼ פרטים</button>
+        </div>
       </div>
-      {% if r.description %}<p class="desc">{{ r.description }}</p>{% endif %}
-      <div class="req-meta">
-        {% if r.parent %}<a class="tag children" href="{{ url_for('requirement_detail', req_id=r.parent.id) }}">↳ תת-דרישה של: {{ r.parent.title }}</a>{% endif %}
-        {% if r.module %}<span class="tag"><span class="swatch" style="background:{{ r.module.color }}"></span>{{ r.module.name }}</span>{% endif %}
-        {% if r.proposer %}<span class="tag proposer">הציע/ה: {{ r.proposer.display_name }}</span>{% endif %}
-        {% if r.implementer_name %}<span class="tag proposer">מוקצה לביצוע: {{ r.implementer_name }}</span>{% endif %}
-        {% if r.children %}<span class="tag children">{{ r.children|length }} תתי-דרישות</span>{% endif %}
-        <span class="prio {{ r.priority }}">עדיפות: {{ r.priority }}</span>
+      <div class="card-body" style="display:none">
+        {% if r.description %}<p class="desc" style="margin-top:0">{{ r.description }}</p>{% endif %}
+        <div class="req-meta">
+          {% if r.module %}<span class="tag"><span class="swatch" style="background:{{ r.module.color }}"></span>{{ r.module.name }}</span>{% endif %}
+          {% if r.proposer %}<span class="tag proposer">הציע/ה: {{ r.proposer.display_name }}</span>{% endif %}
+          {% if r.implementer_name %}<span class="tag proposer">מוקצה לביצוע: {{ r.implementer_name }}</span>{% endif %}
+          {% if r.actual_implementer_name %}<span class="tag" style="background:var(--ok-soft);color:var(--ok)">מימש/ה בפועל: {{ r.actual_implementer_name }}</span>{% endif %}
+          <span class="prio {{ r.priority }}">עדיפות: {{ r.priority }}</span>
+        </div>
+        <div class="req-meta" style="margin-top:10px;gap:6px">
+          <a class="btn ghost sm" href="{{ url_for('requirement_detail', req_id=r.id) }}?back={{ request.full_path|urlencode }}&edit=1">עריכה</a>
+          <a class="btn ghost sm" href="{{ url_for('requirement_detail', req_id=r.id) }}?back={{ request.full_path|urlencode }}#chat">צ'אט{% if r.comments %} ({{ r.comments|length }}){% endif %}</a>
+          <form class="inline-form" method="post" action="{{ url_for('requirement_delete', req_id=r.id) }}" onsubmit="return confirm('למחוק את הדרישה?');">
+            <button class="btn danger sm" type="submit">מחיקה</button>
+          </form>
+        </div>
       </div>
     </div>
     {% endfor %}
